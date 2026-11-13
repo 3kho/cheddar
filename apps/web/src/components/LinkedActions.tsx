@@ -1,5 +1,7 @@
 "use client";
 
+import { safely } from "@/lib/safely";
+
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { convertNoAction, mergePairsAction, mergeYesSetAction, type ActionResult } from "@/lib/actions";
@@ -30,7 +32,7 @@ export function LinkedActions({ wheelId, wedges, binary }: { wheelId: string; we
 
   const run = (fn: () => Promise<ActionResult>) =>
     start(async () => {
-      const r = await fn();
+      const r = await safely(fn());
       setMsg(r);
       if (r.ok) {
         setQty("");

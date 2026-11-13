@@ -1,5 +1,7 @@
 "use client";
 
+import { safely } from "@/lib/safely";
+
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { addFunderAction, type ActionResult } from "@/lib/actions";
@@ -21,7 +23,7 @@ export function FunderForm() {
           disabled={!slackId.trim() || pending}
           onClick={() =>
             start(async () => {
-              const r = await addFunderAction(slackId, note);
+              const r = await safely(addFunderAction(slackId, note));
               setResult(r);
               if (r.ok) {
                 setSlackId("");

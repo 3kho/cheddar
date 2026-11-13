@@ -1,5 +1,7 @@
 "use client";
 
+import { safely } from "@/lib/safely";
+
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { placeOrderAction, type ActionResult } from "@/lib/actions";
@@ -169,7 +171,7 @@ export function TradePanel({
 
   const submit = () =>
     start(async () => {
-      const r = await placeOrderAction({
+      const r = await safely(placeOrderAction({
         wedgeId: wedge.id,
         outcome,
         side,
@@ -178,7 +180,7 @@ export function TradePanel({
         shares: mode === "limit" || side === "SELL" ? shareCount : undefined,
         amount: mode === "market" && side === "BUY" ? amount : undefined,
         slippage: mode === "market" ? slippage : undefined,
-      });
+      }));
       setResult(r);
       if (r.ok) {
         setAmount("");

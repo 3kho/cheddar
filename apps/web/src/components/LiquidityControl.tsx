@@ -1,5 +1,7 @@
 "use client";
 
+import { safely } from "@/lib/safely";
+
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { setLiquidityAction, type ActionResult } from "@/lib/actions";
@@ -60,7 +62,7 @@ export function LiquidityControl({ wheelId, liquidity, outcomes }: { wheelId: st
           disabled={pending}
           onClick={() =>
             start(async () => {
-              const r = await setLiquidityAction(wheelId, n);
+              const r = await safely(setLiquidityAction(wheelId, n));
               setMsg(r);
               if (r.ok) {
                 setOpen(false);

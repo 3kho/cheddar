@@ -1,5 +1,7 @@
 "use client";
 
+import { safely } from "@/lib/safely";
+
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { ActionResult, ReviewExtra } from "@/lib/actions";
@@ -28,7 +30,7 @@ export function ActionButton({
         onClick={() => {
           if (confirm && !window.confirm(confirm)) return;
           start(async () => {
-            const r = await action();
+            const r = await safely(action());
             setMsg(r);
             if (r.ok) router.refresh();
           });
@@ -82,10 +84,10 @@ export function ReviewButtons({
   const needsProof = !!proof && !proofText.trim();
   const run = (approve: boolean) =>
     start(async () => {
-      const r = await action(approve, note, {
+      const r = await safely(action(approve, note, {
         proof: proof ? proofText : undefined,
         liquidity: liquidity != null ? Math.max(0, Math.trunc(Number(depth) || 0)) : undefined,
-      });
+      }));
       setMsg(r);
       setConfirming(null);
       if (r.ok) router.refresh();
@@ -226,7 +228,7 @@ export function ReasonAction({
         disabled={pending || (!optional && !reason.trim())}
         onClick={() =>
           start(async () => {
-            const r = await action(reason);
+            const r = await safely(action(reason));
             setMsg(r);
             if (r.ok) {
               setOpen(false);

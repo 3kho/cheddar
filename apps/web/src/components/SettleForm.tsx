@@ -1,5 +1,7 @@
 "use client";
 
+import { safely } from "@/lib/safely";
+
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { proposeSettlementAction, type ActionResult } from "@/lib/actions";
@@ -76,7 +78,7 @@ export function SettleForm({ wheelId, wedges, id }: { wheelId: string; wedges: {
             disabled={!choice || !evidence.trim() || pending}
             onClick={() =>
               start(async () => {
-                const r = await proposeSettlementAction({ wheelId, choice, evidence });
+                const r = await safely(proposeSettlementAction({ wheelId, choice, evidence }));
                 setResult(r);
                 if (r.ok) router.refresh();
               })

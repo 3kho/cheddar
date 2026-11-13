@@ -1,5 +1,7 @@
 "use client";
 
+import { safely } from "@/lib/safely";
+
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { submitProposalAction, type ActionResult } from "@/lib/actions";
@@ -86,14 +88,14 @@ export function ProposeForm({ children }: { children?: React.ReactNode }) {
           e.preventDefault();
           if (!canSubmit) return;
           start(async () => {
-            const r = await submitProposalAction({
+            const r = await safely(submitProposalAction({
               title,
               description,
               category,
               resolutionCriteria: criteria,
               outcomes: kind === "multi" ? cleanOutcomes : [],
               icon,
-            });
+            }));
             setResult(r);
             if (r.ok) {
               reset();
