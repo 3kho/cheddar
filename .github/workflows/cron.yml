@@ -16,7 +16,10 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/mouse"
+          url="$(printf '%s' "$APP_URL" | tr -d '[:space:]')"; url="${url%/}"
+          case "$url" in http://*|https://*) ;; *) url="https://$url" ;; esac
+          secret="$(printf '%s' "$CRON_SECRET" | tr -d '\r\n')"
+          curl -fsS -H "Authorization: Bearer $secret" "$url/api/cron/mouse"
   churn:
     if: github.event.schedule != '*/5 * * * *'
     runs-on: ubuntu-latest
@@ -26,4 +29,7 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/churn"
+          url="$(printf '%s' "$APP_URL" | tr -d '[:space:]')"; url="${url%/}"
+          case "$url" in http://*|https://*) ;; *) url="https://$url" ;; esac
+          secret="$(printf '%s' "$CRON_SECRET" | tr -d '\r\n')"
+          curl -fsS -H "Authorization: Bearer $secret" "$url/api/cron/churn"
