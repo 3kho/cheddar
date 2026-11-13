@@ -1,0 +1,19 @@
+# Frequent cron for Vercel Hobby (whose own cron only runs once a day).
+# Repo secrets needed: APP_URL (e.g. https://cheddar.vercel.app) and CRON_SECRET.
+name: cron
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+jobs:
+  mouse:
+    if: github.event.schedule != '*/15 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${{ secrets.APP_URL }}/api/cron/mouse"
+  churn:
+    if: github.event.schedule != '*/5 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${{ secrets.APP_URL }}/api/cron/churn"

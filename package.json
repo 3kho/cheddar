@@ -1,0 +1,18 @@
+{
+  "name": "cheddar",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "scripts": {
+    "test": "pnpm -r test",
+    "dev": "pnpm --filter @cheddar/web dev",
+    "build": "pnpm --filter @cheddar/web build",
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "db:migrate": "tsx scripts/migrate.ts"
+  },
+  "devDependencies": {
+    "@cheddar/db": "workspace:*",
+    "@cheddar/exchange": "workspace:*",
+    "tsx": "^4.23.15"
+  }
+}

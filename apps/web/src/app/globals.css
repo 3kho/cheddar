@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+/* Clean exchange palette (neutral grays, one blue, green/red for Yes/No) with a cheddar accent
+   for the brand. Light is the base; dark follows the OS unless the user picked a theme
+   (data-theme on <html>). */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f5f7;
+  --surface-3: #e6e8ec;
+  --border: #e6e8ec;
+  --border-alpha: rgb(0 0 0 / 0.06);
+  --hover: rgb(0 0 0 / 0.05);
+  --text: #23272d;
+  --muted: #6b727b;
+  --faint: #8b929b;
+  --primary: #2e5cff;
+  --primary-hover: #1c3fe2;
+  --primary-soft: #e8eeff;
+  --yes: #04a24c;
+  --yes-solid: #0a9a4a;
+  --yes-soft: #d9f0e1;
+  --yes-soft-hover: #c4e8d0;
+  --no: #df1c20;
+  --no-solid: #df1c20;
+  --no-soft: #fce8e8;
+  --no-soft-hover: #f9d9d9;
+  --accent: #e09a12;
+  --accent-ink: #1a1203;
+  --accent-soft: #fdf3dc;
+  --warn: #b7791f;
+  --chart-binary: #1452f0;
+  --chart-1: #2e5cff;
+  --chart-2: #87bfff;
+  --chart-3: #f2b705;
+  --chart-4: #ff7f0e;
+  --shadow-a: rgb(0 0 0 / 0.024);
+  --shadow-b: rgb(0 0 0 / 0.06);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0e13;
+    --surface: #1c1f27;
+    --surface-2: #2d3037;
+    --surface-3: #45474e;
+    --border: #2d3037;
+    --border-alpha: rgb(255 255 255 / 0.12);
+    --hover: rgb(255 255 255 / 0.08);
+    --text: #ffffff;
+    --muted: #b6bbc4;
+    --faint: #999ea7;
+    --primary: #3262ff;
+    --primary-hover: #5485ff;
+    --primary-soft: #1d2a5c;
+    --yes: #22c463;
+    --yes-solid: #0f9a49;
+    --yes-soft: #17382a;
+    --yes-soft-hover: #1c4733;
+    --no: #ff6f61;
+    --no-solid: #e0242a;
+    --no-soft: #3f1214;
+    --no-soft-hover: #521719;
+    --accent: #f5b83d;
+    --accent-ink: #1a1203;
+    --accent-soft: #3a2e14;
+  --warn: #f5b83d;
+    --chart-binary: #0093fd;
+    --chart-1: #2797ff;
+    --chart-2: #87bfff;
+    --chart-3: #fdc503;
+    --chart-4: #ff7f0e;
+    --shadow-a: rgb(0 0 0 / 0.1);
+    --shadow-b: rgb(0 0 0 / 0.12);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0c0e13;
+  --surface: #1c1f27;
+  --surface-2: #2d3037;
+  --surface-3: #45474e;
+  --border: #2d3037;
+  --border-alpha: rgb(255 255 255 / 0.12);
+  --hover: rgb(255 255 255 / 0.08);
+  --text: #ffffff;
+  --muted: #b6bbc4;
+  --faint: #999ea7;
+  --primary: #3262ff;
+  --primary-hover: #5485ff;
+  --primary-soft: #1d2a5c;
+  --yes: #22c463;
+  --yes-solid: #0f9a49;
+  --yes-soft: #17382a;
+  --yes-soft-hover: #1c4733;
+  --no: #ff6f61;
+  --no-solid: #e0242a;
+  --no-soft: #3f1214;
+  --no-soft-hover: #521719;
+  --accent: #f5b83d;
+  --accent-ink: #1a1203;
+  --accent-soft: #3a2e14;
+  --warn: #f5b83d;
+  --chart-binary: #0093fd;
+  --chart-1: #2797ff;
+  --chart-2: #87bfff;
+  --chart-3: #fdc503;
+  --chart-4: #ff7f0e;
+  --shadow-a: rgb(0 0 0 / 0.1);
+  --shadow-b: rgb(0 0 0 / 0.12);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-hover: var(--hover);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-yes: var(--yes);
+  --color-yes-solid: var(--yes-solid);
+  --color-yes-soft: var(--yes-soft);
+  --color-yes-soft-hover: var(--yes-soft-hover);
+  --color-no: var(--no);
+  --color-no-solid: var(--no-solid);
+  --color-no-soft: var(--no-soft);
+  --color-no-soft-hover: var(--no-soft-hover);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Resting cards, and hovered cards / panels. */
+  --shadow-soft: 0 0 0 1px var(--border-alpha), 0 2px 6px -0.5px var(--shadow-a), 0 2px 10px var(--shadow-a);
+  --shadow-mid: 0 0 0 1px var(--border-alpha), 0 1px 1px -0.5px var(--shadow-b), 0 3px 3px -1.5px var(--shadow-b),
+    0 6px 6px -3px var(--shadow-b);
+  --shadow-pop: 0 0 0 1px var(--border-alpha), 0 2px 4px var(--shadow-b), 0 8px 16px var(--shadow-b), 0 16px 32px var(--shadow-b);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.09px;
+  font-feature-settings: "liga" 1, "calt" 1, "cv01" 1, "cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chunky buttons with a ledge underneath: they sink when pressed. */
+.btn-3d {
+  position: relative;
+  border-radius: 9px;
+  box-shadow: 0 4px 0 0 rgb(0 0 0 / 0.2);
+  transition:
+    transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 150ms,
+    opacity 150ms;
+}
+.btn-3d:hover:not(:disabled) {
+  transform: translateY(1.5px);
+  box-shadow: 0 2.5px 0 0 rgb(0 0 0 / 0.2);
+}
+.btn-3d:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 0 rgb(0 0 0 / 0.2);
+}
+.btn-3d:disabled {
+  cursor: not-allowed;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-3d,
+  .btn-3d:hover:not(:disabled),
+  .btn-3d:active:not(:disabled) {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Charts draw in from the left. */
+@keyframes chart-reveal {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.chart-reveal {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: chart-reveal 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-reveal {
+    animation: none;
+  }
+  .chart-dot .animate-ping {
+    animation: none;
+  }
+}

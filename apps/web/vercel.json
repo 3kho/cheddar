@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --dir ../.. db:migrate && next build",
+  "crons": [
+    { "path": "/api/cron/churn", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/mouse", "schedule": "0 0 * * *" }
+  ]
+}

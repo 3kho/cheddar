@@ -1,0 +1,2 @@
+ALTER TABLE "users" DROP CONSTRAINT "users_human_has_sub";--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_identified" CHECK ("users"."is_bot" OR "users"."hca_sub" IS NOT NULL OR "users"."slack_id" IS NOT NULL);
