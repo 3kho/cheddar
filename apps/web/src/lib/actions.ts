@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import {
   ExchangeError,
   addMouseFunder,
@@ -88,7 +89,7 @@ export async function placeOrderAction(input: TradeInput): Promise<ActionResult>
         price: Number(input.price),
         qty: Number(input.shares),
       });
-      await requoteForWedge(input.wedgeId);
+      after(() => requoteForWedge(input.wedgeId));
       revalidatePath("/", "layout");
       if (r.status === "filled") return { ok: true, message: `${label}: ${r.filled} shares filled.` };
       return {
@@ -131,7 +132,7 @@ export async function placeOrderAction(input: TradeInput): Promise<ActionResult>
       qty,
       tif: "IOC",
     });
-    await requoteForWedge(input.wedgeId);
+    after(() => requoteForWedge(input.wedgeId));
     revalidatePath("/", "layout");
     if (!r.filled) return fail("The price moved before your order arrived. Nothing was filled.");
     const cash = r.trades.reduce((s, t) => s + Math.abs(t.legs.find((l) => l.userId === u.id)?.cash ?? 0), 0);
@@ -261,7 +262,7 @@ export async function mergePairsAction(wedgeId: string, shares: number): Promise
   return attempt(async () => {
     const u = await signedIn();
     const r = await mergePairs(await getDb(), { userId: u.id, wedgeId, shares });
-    await requoteForWedge(wedgeId);
+    after(() => requoteForWedge(wedgeId));
     revalidatePath("/", "layout");
     return { ok: true, message: `Redeemed ${r.shares} Yes + No pairs for ${formatLatta(r.paidTicks)}.` };
   });
@@ -271,7 +272,7 @@ export async function mergeYesSetAction(wheelId: string, shares: number): Promis
   return attempt(async () => {
     const u = await signedIn();
     const r = await mergeYesSet(await getDb(), { userId: u.id, wheelId, shares });
-    await requote(wheelId);
+    after(() => requote(wheelId));
     revalidatePath("/", "layout");
     return { ok: true, message: `Redeemed ${r.shares} full Yes sets for ${formatLatta(r.paidTicks)}.` };
   });
@@ -281,7 +282,7 @@ export async function convertNoAction(wheelId: string, wedgeIds: string[], share
   return attempt(async () => {
     const u = await signedIn();
     const r = await convertNo(await getDb(), { userId: u.id, wheelId, wedgeIds, shares });
-    await requote(wheelId);
+    after(() => requote(wheelId));
     revalidatePath("/", "layout");
     const parts = [];
     if (r.yesOn.length) parts.push(`${r.shares} Yes on ${r.yesOn.length} other outcome${r.yesOn.length === 1 ? "" : "s"}`);
@@ -317,7 +318,7 @@ export async function proposeSettlementAction(input: {
       winningWedgeId,
       evidence: input.evidence,
     });
-    await requote(input.wheelId); // pulls The Mouse's quotes while it ripens
+    after(() => requote(input.wheelId)); // pulls The Mouse's quotes while it ripens
     revalidatePath("/", "layout");
     return { ok: true, message: "Request sent. Trading is paused until a Cheesemonger reviews it." };
   });
@@ -341,7 +342,7 @@ export async function reviewSettlementAction(
       return { ok: true, message: `Ripened! Paid out ${formatLatta(paid)}.` };
     }
     await rejectSettlement(db, { settlementId, reviewerId: u.id, note }, reviewOpts());
-    await requoteAll(); // trading reopened: The Mouse quotes again
+    after(() => requoteAll()); // trading reopened: The Mouse quotes again
     revalidatePath("/", "layout");
     return { ok: true, message: "Settlement rejected; trading reopened." };
   });
@@ -413,7 +414,7 @@ export async function pauseWheelAction(wheelId: string, reason: string): Promise
   return attempt(async () => {
     const u = await signedIn();
     await pauseWheel(await getDb(), { wheelId, actorId: u.id, reason });
-    await requote(wheelId);
+    after(() => requote(wheelId));
     revalidatePath("/", "layout");
     return { ok: true, message: "Trading paused." };
   });
@@ -423,7 +424,7 @@ export async function resumeWheelAction(wheelId: string): Promise<ActionResult> 
   return attempt(async () => {
     const u = await signedIn();
     await resumeWheel(await getDb(), { wheelId, actorId: u.id });
-    await requote(wheelId);
+    after(() => requote(wheelId));
     revalidatePath("/", "layout");
     return { ok: true, message: "Trading resumed." };
   });

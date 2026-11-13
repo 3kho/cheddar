@@ -20,7 +20,7 @@ async function open(): Promise<AnyDb> {
   if (env.databaseUrl) {
     // Serverless: many short-lived instances, so keep each pool small. Migrations run at build
     // time there (scripts/migrate.ts), not on every cold start.
-    const opts = env.onVercel ? { max: 3, migrate: false } : { migrationsFolder };
+    const opts = env.onVercel ? { max: 5, migrate: false } : { migrationsFolder };
     db = (await createNodePgDb(env.databaseUrl, opts)).db as unknown as AnyDb;
   } else if (env.onVercel) {
     throw new Error("DATABASE_URL is required on Vercel (there is no persistent disk for PGlite).");
