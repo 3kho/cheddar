@@ -1,8 +1,8 @@
 /**
  * Churn: Hackatime non-AI coding hours -> Latta.
  *
- * Rule: a user has earned floor(lifetimeNonAiSeconds * 25 Latta / 3600) in total
- * (2,500 ticks per hour). Each sync credits target - alreadyCredited, so syncs are
+ * Rule: a user has earned floor(lifetimeNonAiSeconds * 10 Latta / 3600) in total
+ * (1,000 ticks per hour). Each sync credits target - alreadyCredited, so syncs are
  * idempotent and retries can't double-pay. "Already credited" is read from the
  * ledger itself, not from a counter.
  *
@@ -32,10 +32,10 @@ import { logEvent } from "./log";
 import type { HackatimeClient, TrustLevel } from "./hackatime";
 import { Deltas, adjustPosition, churnIssuanceAccount, lockedBalance, postEntry, userAccounts } from "./ledger";
 
-export const LATTA_PER_HOUR = 25;
+export const LATTA_PER_HOUR = 10;
 export const TICKS_PER_LATTA = 100;
 
-/** floor(seconds * 2500 / 3600) in exact integer arithmetic. */
+/** floor(seconds * 1000 / 3600) in exact integer arithmetic. */
 export function ticksForSeconds(seconds: number): number {
   if (!Number.isSafeInteger(seconds) || seconds < 0) throw new Error(`bad seconds ${seconds}`);
   return Math.floor((seconds * LATTA_PER_HOUR * TICKS_PER_LATTA) / 3600);

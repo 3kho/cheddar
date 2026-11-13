@@ -46,7 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <p className="mx-auto flex max-w-[1350px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
               <span>
                 <CheeseIcon size={15} className="mr-1.5 inline-block align-[-3px] text-accent" />
-                <strong>Link Hackatime to start earning.</strong> Every hour of non-AI coding churns into 25 Latta.
+                <strong>Link Hackatime to start earning.</strong> Every hour of non-AI coding churns into 10 Latta.
               </span>
               <a href="/api/hackatime/start" className="font-semibold underline underline-offset-2">
                 Link Hackatime →

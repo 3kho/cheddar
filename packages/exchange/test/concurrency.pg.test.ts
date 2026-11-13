@@ -200,7 +200,7 @@ describe("concurrency on real Postgres", () => {
     };
     await Promise.all(Array.from({ length: 30 }, () => syncUser(db, ht, u.id)));
     await syncUser(db, ht, u.id);
-    expect((await balances(db, u.id)).available).toBe(20 * 2_500);
+    expect((await balances(db, u.id)).available).toBe(20 * 1_000);
     expect(await audit(db)).toEqual([]);
   }, 120_000);
 

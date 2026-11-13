@@ -55,22 +55,22 @@ async function coder(name: string, hackatimeUserId: string, slackId?: string) {
 }
 
 describe("Churn", () => {
-  it("converts seconds to ticks exactly: 25 Latta per hour, rounded down", () => {
-    expect(ticksForSeconds(3600)).toBe(2_500);
-    expect(ticksForSeconds(1)).toBe(0); // 0.69 ticks
-    expect(ticksForSeconds(2)).toBe(1); // 1.39 ticks
-    expect(ticksForSeconds(731_627)).toBe(508_074); // 203.23 hours -> 5,080.74 Latta
+  it("converts seconds to ticks exactly: 10 Latta per hour, rounded down", () => {
+    expect(ticksForSeconds(3600)).toBe(1_000);
+    expect(ticksForSeconds(1)).toBe(0); // 0.28 ticks
+    expect(ticksForSeconds(4)).toBe(1); // 1.11 ticks
+    expect(ticksForSeconds(731_627)).toBe(203_229); // 203.23 hours -> 2,032.29 Latta
     expect(() => ticksForSeconds(1.5)).toThrow();
   });
 
   it("credits lifetime hours, then only the increase, and is idempotent", async () => {
     const u = await coder("orpheus", "101");
     ht.set("101", 10);
-    expect(await syncUser(db, ht, u.id)).toMatchObject({ status: "credited", creditedTicks: 25_000 });
+    expect(await syncUser(db, ht, u.id)).toMatchObject({ status: "credited", creditedTicks: 10_000 });
     expect(await syncUser(db, ht, u.id)).toMatchObject({ status: "no_change", creditedTicks: 0 });
     ht.set("101", 12.5);
-    expect(await syncUser(db, ht, u.id)).toMatchObject({ status: "credited", creditedTicks: 6_250 });
-    expect((await balances(db, u.id)).available).toBe(31_250);
+    expect(await syncUser(db, ht, u.id)).toMatchObject({ status: "credited", creditedTicks: 2_500 });
+    expect((await balances(db, u.id)).available).toBe(12_500);
   });
 
   it("partial-hour remainders are never lost across syncs", async () => {
@@ -92,7 +92,7 @@ describe("Churn", () => {
     await syncUser(db, ht, u.id);
     expect((await balances(db, u.id)).available).toBe(0);
     ht.set("103", 9, "green");
-    expect(await syncUser(db, ht, u.id)).toMatchObject({ status: "credited", creditedTicks: 22_500 });
+    expect(await syncUser(db, ht, u.id)).toMatchObject({ status: "credited", creditedTicks: 9_000 });
   });
 
   it("hours going down claw nothing back, and later growth only pays above the old high", async () => {
@@ -101,9 +101,9 @@ describe("Churn", () => {
     await syncUser(db, ht, u.id);
     ht.set("104", 6);
     expect(await syncUser(db, ht, u.id)).toMatchObject({ status: "no_change" });
-    expect((await balances(db, u.id)).available).toBe(25_000);
+    expect((await balances(db, u.id)).available).toBe(10_000);
     ht.set("104", 11);
-    expect(await syncUser(db, ht, u.id)).toMatchObject({ creditedTicks: 2_500 });
+    expect(await syncUser(db, ht, u.id)).toMatchObject({ creditedTicks: 1_000 });
   });
 
   it("records Hackatime failures without crediting, and refuses unlinked users and bots", async () => {
@@ -146,9 +146,9 @@ describe("Mouse funders", () => {
     expect(added).toMatchObject({ created: true, swept: null });
     ht.set("U0STAFF01", 40); // looked up on Hackatime by Slack id, no linking
     const results = await syncAll(db, ht);
-    expect(results).toEqual([expect.objectContaining({ userId: added.userId, status: "credited", creditedTicks: 100_000, toMouse: true })]);
+    expect(results).toEqual([expect.objectContaining({ userId: added.userId, status: "credited", creditedTicks: 40_000, toMouse: true })]);
     const mouse = await ensureMouse(db);
-    expect((await balances(db, mouse.id)).available).toBe(100_000);
+    expect((await balances(db, mouse.id)).available).toBe(40_000);
     expect((await balances(db, added.userId)).available).toBe(0);
     // The ledger still says whose hours earned it.
     const [entry] = await db.select().from(journalEntries).where(eq(journalEntries.kind, "churn"));
@@ -165,8 +165,8 @@ describe("Mouse funders", () => {
     // They log in with Hack Club Auth and link Hackatime: same row, now with an HCA subject and numeric id.
     await db.update(users).set({ hcaSub: "ident!staff09", name: "Staffer", hackatimeUserId: "909" }).where(eq(users.id, userId));
     ht.set("909", 12);
-    expect(await syncUser(db, ht, userId)).toMatchObject({ creditedTicks: 5_000, toMouse: true }); // only the 2 new hours
-    expect((await balances(db, (await ensureMouse(db)).id)).available).toBe(30_000);
+    expect(await syncUser(db, ht, userId)).toMatchObject({ creditedTicks: 2_000, toMouse: true }); // only the 2 new hours
+    expect((await balances(db, (await ensureMouse(db)).id)).available).toBe(12_000);
   });
 
   it("unlinked users who aren't funders are not synced, and private funder stats are reported", async () => {
@@ -217,12 +217,12 @@ describe("Mouse funders", () => {
     const staff = await coder("staff", "303", "U0STAFF03");
     await addMouseFunder(db, { slackId: "U0STAFF03", addedById: monger.id });
     ht.set("303", 2);
-    await syncUser(db, ht, staff.id); // 5,000 -> Mouse
+    await syncUser(db, ht, staff.id); // 2,000 -> Mouse
     await removeMouseFunder(db, { slackId: "U0STAFF03", removedById: monger.id });
     ht.set("303", 3);
-    expect(await syncUser(db, ht, staff.id)).toMatchObject({ creditedTicks: 2_500, toMouse: false });
-    expect((await balances(db, staff.id)).available).toBe(2_500);
-    expect((await balances(db, (await ensureMouse(db)).id)).available).toBe(5_000);
+    expect(await syncUser(db, ht, staff.id)).toMatchObject({ creditedTicks: 1_000, toMouse: false });
+    expect((await balances(db, staff.id)).available).toBe(1_000);
+    expect((await balances(db, (await ensureMouse(db)).id)).available).toBe(2_000);
   });
 });
 
