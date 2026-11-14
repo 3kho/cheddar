@@ -9,6 +9,8 @@ export {
   submitProposal,
   withdrawProposal,
   MAX_WEDGES,
+  OTHER_LABEL,
+  isOtherLabel,
   MAX_ICON_CHARS,
   cleanIcon,
   cleanCloseTime,

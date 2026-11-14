@@ -9,6 +9,7 @@ import {
   type ActionResult,
   type ProposalFormInput,
 } from "@/lib/actions";
+import { OTHER_LABEL, isOtherLabel } from "@/lib/format";
 import { safely } from "@/lib/safely";
 import { Notice } from "./ActionButton";
 import {
@@ -113,8 +114,12 @@ export function ProposeForm({
   const [pending, start] = useTransition();
 
   const multi = kind === "multi";
-  const newOutcomes = outcomes.map((o) => o.trim()).filter(Boolean);
   const liveLabels = existing.map((w) => (labels[w.id] ?? "").trim());
+  // A wheel open to new outcomes always carries an "Other" (last), which wins if none of the listed
+  // outcomes, including ones added later, do. It's added for them, so they can't forget it.
+  const autoOther = multi && allowAdditions && !liveLabels.some(isOtherLabel);
+  const typedOutcomes = outcomes.map((o) => o.trim()).filter(Boolean);
+  const newOutcomes = autoOther ? [...typedOutcomes.filter((o) => !isOtherLabel(o)), OTHER_LABEL] : typedOutcomes;
   const allLabels = [...liveLabels, ...newOutcomes];
   const shown = allLabels.filter(Boolean);
   const dupes = new Set(shown.map((o) => o.toLowerCase())).size !== shown.length;
@@ -334,6 +339,18 @@ export function ProposeForm({
                   onRemove: isWheel || outcomes.length > 2 ? () => setOutcomes((xs) => xs.filter((_, j) => j !== i)) : undefined,
                 }),
               )}
+              {autoOther && (
+                <li className="flex items-center gap-2">
+                  <span className="tabular w-5 text-right text-xs font-semibold text-faint">{existing.length + outcomes.length + 1}</span>
+                  <input value={OTHER_LABEL} readOnly aria-label="Other (added automatically)" className={`${field} h-10 text-muted`} />
+                  <span
+                    className="grid h-10 w-10 shrink-0 place-items-center text-[10px] font-semibold uppercase tracking-wide text-faint"
+                    title="Added automatically while new outcomes are allowed"
+                  >
+                    Auto
+                  </span>
+                </li>
+              )}
             </ol>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 pl-7">
               <button
@@ -342,7 +359,7 @@ export function ProposeForm({
                   setOutcomes((xs) => [...xs, ""]);
                   focusOutcome(existing.length + outcomes.length);
                 }}
-                disabled={existing.length + outcomes.length >= MAX_OUTCOMES}
+                disabled={existing.length + outcomes.length + (autoOther ? 1 : 0) >= MAX_OUTCOMES}
                 className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-dashed border-line px-3 text-sm font-semibold text-muted hover:bg-hover hover:text-ink disabled:opacity-40"
               >
                 <PlusIcon size={15} /> Add outcome
@@ -352,7 +369,9 @@ export function ProposeForm({
                   ? outcomeProblem
                   : isWheel
                     ? "New outcomes go live when you save."
-                    : "Add an “Other” if the list might not cover it."}
+                    : allowAdditions
+                      ? "“Other” is added for you. It wins if nothing listed (or added later) does."
+                      : "Not sure the list covers everything? Turn on suggestions below and “Other” is added for you."}
               </span>
             </div>
 
@@ -363,7 +382,7 @@ export function ProposeForm({
               title="Let people suggest new outcomes"
               sub={
                 allowAdditions
-                  ? "Anyone can suggest one on the wheel's page, and a Cheesemonger approves it before it's added. Whole-wheel conversions stay off while this is on, since the list isn't final."
+                  ? "Anyone can suggest one on the wheel's page, and a Cheesemonger approves it before it's added. An “Other” outcome is added automatically and covers anything not listed, including outcomes added later. Whole-wheel conversions stay off while this is on, since the list isn't final."
                   : "The list above is final. (Cheesemongers can still add an outcome.)"
               }
             />

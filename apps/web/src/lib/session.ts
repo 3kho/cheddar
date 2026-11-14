@@ -23,6 +23,8 @@ export interface SessionUser {
   /** Suspended by a Cheesemonger: can look but not trade, propose or settle. */
   suspendReason: string | null;
   isSuspended: boolean;
+  /** Ticked the fair-play rules. Until then they can look but not trade, propose or suggest. */
+  hasAcceptedFairPlay: boolean;
 }
 
 /** Call from a route handler or server action. */
@@ -64,6 +66,7 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
       hackatimeUserId: users.hackatimeUserId,
       suspendedAt: users.suspendedAt,
       suspendReason: users.suspendReason,
+      fairPlayAcceptedAt: users.fairPlayAcceptedAt,
       funder: mouseFunders.slackId,
     })
     .from(sessions)
@@ -71,8 +74,8 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
     .leftJoin(mouseFunders, and(eq(mouseFunders.slackId, users.slackId), eq(mouseFunders.active, true)))
     .where(and(eq(sessions.idHash, sha256(token)), gt(sessions.expiresAt, new Date())));
   if (!row) return null;
-  const { funder, suspendedAt, ...u } = row;
-  return { ...u, isMouseFunder: !!funder, isSuspended: !!suspendedAt };
+  const { funder, suspendedAt, fairPlayAcceptedAt, ...u } = row;
+  return { ...u, isMouseFunder: !!funder, isSuspended: !!suspendedAt, hasAcceptedFairPlay: !!fairPlayAcceptedAt };
 });
 
 export async function requireUser(returnTo = "/"): Promise<SessionUser> {

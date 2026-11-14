@@ -42,6 +42,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </p>
           </div>
         )}
+        {user && !user.hasAcceptedFairPlay && (
+          <div className="border-b border-line bg-accent-soft">
+            <p className="mx-auto flex max-w-[1350px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+              <span>
+                <strong>Read the fair play rules to start trading.</strong> Insider trading is strictly prohibited.
+              </span>
+              <Link href="/welcome" className="font-semibold underline underline-offset-2">
+                Review &amp; accept →
+              </Link>
+            </p>
+          </div>
+        )}
         {user && !user.isMouseFunder && !user.hackatimeUserId && (
           <div className="border-b border-line bg-accent-soft">
             <p className="mx-auto flex max-w-[1350px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">

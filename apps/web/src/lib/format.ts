@@ -81,5 +81,9 @@ export function timeAgo(d: Date | string, now = Date.now()): string {
   return formatDate(d);
 }
 
+/** Mirrors OTHER_LABEL in @cheddar/exchange (this file is safe to import from client components). */
+export const OTHER_LABEL = "Other";
+export const isOtherLabel = (label: string) => label.trim().toLowerCase() === OTHER_LABEL.toLowerCase();
+
 /** Longest display name a user can pick on /profile. */
 export const MAX_NAME_LENGTH = 32;

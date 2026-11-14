@@ -111,6 +111,8 @@ export const users = pgTable(
     /** Set by a Cheesemonger: suspended users can look but not trade, propose or settle. */
     suspendedAt: ts("suspended_at"),
     suspendReason: text("suspend_reason"),
+    /** When they ticked the fair-play rules (no insider trading etc). Null until they do. */
+    fairPlayAcceptedAt: ts("fair_play_accepted_at"),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [

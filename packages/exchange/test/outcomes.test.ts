@@ -69,7 +69,7 @@ describe("editing proposals", () => {
         icon: "svg:trophy",
       },
     });
-    expect(edited).toMatchObject({ title: "Which day will it rain first?", outcomes: ["Monday", "Tuesday"], allowAdditions: true, icon: "svg:trophy" });
+    expect(edited).toMatchObject({ title: "Which day will it rain first?", outcomes: ["Monday", "Tuesday", "Other"], allowAdditions: true, icon: "svg:trophy" });
     expect(edited.closesAt?.getTime()).toBe(closesAt.getTime());
     // Binary proposals can't be open to new outcomes.
     const bin = await updateProposal(db, {
@@ -116,10 +116,11 @@ describe("adding outcomes", () => {
     const out = await reviewOutcomeRequest(db, { requestId: r.id, reviewerId: monger.id, approve: true, label: "Zig", startChance: 0.2 });
     expect(out.approved).toBe(true);
     const ps = await prices(wheel.id);
-    expect(ps.map((x) => x.label)).toEqual(["Rust", "Go", "Zig"]);
+    // "Other" is added automatically and stays last: the new outcome slots in above it.
+    expect(ps.map((x) => x.label)).toEqual(["Rust", "Go", "Zig", "Other"]);
     expect(ps.reduce((s, x) => s + x.p, 0)).toBeCloseTo(1, 9);
     expect(ps[2]!.p).toBeCloseTo(0.2, 6);
-    expect(ps[0]!.p).toBeCloseTo(0.4, 6);
+    expect(ps[0]!.p).toBeCloseTo((1 / 3) * 0.8, 6);
 
     await requoteWheel(db, ex, wheel.id);
     const zig = (await db.select().from(wedges).where(and(eq(wedges.wheelId, wheel.id), eq(wedges.label, "Zig"))))[0]!;
@@ -132,11 +133,12 @@ describe("adding outcomes", () => {
     await ex.placeOrder({ userId: alice.id, wedgeId: ws[0]!.id, outcome: "YES", side: "BUY", price: 99, qty: 150, tif: "IOC" });
     await requoteWheel(db, ex, wheel.id);
     const before = await prices(wheel.id);
-    expect(before[0]!.p).toBeGreaterThan(0.55);
+    expect(before[0]!.p).toBeGreaterThan(1 / 3);
     await addOutcome(db, { wheelId: wheel.id, actorId: monger.id, label: "Zig" });
     const after = await prices(wheel.id);
-    expect(after[2]!.p).toBeCloseTo(1 / 3, 6);
-    expect(after[0]!.p).toBeCloseTo(before[0]!.p * (2 / 3), 6);
+    expect(after.map((x) => x.label)).toEqual(["Rust", "Go", "Zig", "Other"]);
+    expect(after[2]!.p).toBeCloseTo(1 / 4, 6);
+    expect(after[0]!.p).toBeCloseTo(before[0]!.p * (3 / 4), 6);
     await requoteWheel(db, ex, wheel.id);
   });
 

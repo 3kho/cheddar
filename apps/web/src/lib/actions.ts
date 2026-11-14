@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import {
   ExchangeError,
+  isOtherLabel,
   addMouseFunder,
   addOutcome,
   requestOutcome,
@@ -56,9 +57,13 @@ async function attempt(fn: () => Promise<ActionResult>): Promise<ActionResult> {
   }
 }
 
-async function signedIn() {
+/** `fairPlay: true` for anything that trades, proposes or suggests: those need the rules ticked first. */
+async function signedIn(fairPlay = false) {
   const u = await currentUser();
   if (!u) throw new ExchangeError("FORBIDDEN", "Please log in first.");
+  if (fairPlay && !u.hasAcceptedFairPlay) {
+    throw new ExchangeError("FORBIDDEN", "Please accept the fair play rules first (use the banner at the top of the page).");
+  }
   return u;
 }
 
@@ -83,7 +88,7 @@ export interface TradeInput {
 
 export async function placeOrderAction(input: TradeInput): Promise<ActionResult> {
   return attempt(async () => {
-    const u = await signedIn();
+    const u = await signedIn(true);
     const ex = await getExchange();
     const label = `${input.side === "BUY" ? "Bought" : "Sold"} ${input.outcome === "YES" ? "Yes" : "No"}`;
 
@@ -222,7 +227,7 @@ function parseClose(v: string | null | undefined): Date | null {
 
 export async function submitProposalAction(input: ProposalFormInput): Promise<ActionResult> {
   return attempt(async () => {
-    const u = await signedIn();
+    const u = await signedIn(true);
     await submitProposal(await getDb(), { proposerId: u.id, ...proposalFields(input) });
     revalidatePath("/propose");
     revalidatePath("/cheesemongers");
@@ -264,7 +269,10 @@ export async function updateWheelAction(
       },
     });
     const added: string[] = [];
-    for (const label of (input.newOutcomes ?? []).map((x) => String(x).trim()).filter(Boolean)) {
+    // "Other" goes in last so it stays the bottom row.
+    const toAdd = (input.newOutcomes ?? []).map((x) => String(x).trim()).filter(Boolean);
+    toAdd.sort((a, b) => Number(isOtherLabel(a)) - Number(isOtherLabel(b)));
+    for (const label of toAdd) {
       await addOutcome(db, { wheelId, actorId: u.id, label });
       added.push(label);
     }
@@ -278,7 +286,7 @@ export async function updateWheelAction(
 
 export async function requestOutcomeAction(wheelId: string, label: string, note: string): Promise<ActionResult> {
   return attempt(async () => {
-    const u = await signedIn();
+    const u = await signedIn(true);
     const r = await requestOutcome(await getDb(), { wheelId, userId: u.id, label, note });
     revalidatePath("/", "layout");
     return { ok: true, message: `Suggested “${r.label}”. A Cheesemonger will look at it.` };
@@ -364,7 +372,7 @@ export async function setLiquidityAction(wheelId: string, liquidity: number): Pr
 
 export async function mergePairsAction(wedgeId: string, shares: number): Promise<ActionResult> {
   return attempt(async () => {
-    const u = await signedIn();
+    const u = await signedIn(true);
     const r = await mergePairs(await getDb(), { userId: u.id, wedgeId, shares });
     after(() => requoteForWedge(wedgeId));
     revalidatePath("/", "layout");
@@ -374,7 +382,7 @@ export async function mergePairsAction(wedgeId: string, shares: number): Promise
 
 export async function mergeYesSetAction(wheelId: string, shares: number): Promise<ActionResult> {
   return attempt(async () => {
-    const u = await signedIn();
+    const u = await signedIn(true);
     const r = await mergeYesSet(await getDb(), { userId: u.id, wheelId, shares });
     after(() => requote(wheelId));
     revalidatePath("/", "layout");
@@ -384,7 +392,7 @@ export async function mergeYesSetAction(wheelId: string, shares: number): Promis
 
 export async function convertNoAction(wheelId: string, wedgeIds: string[], shares: number): Promise<ActionResult> {
   return attempt(async () => {
-    const u = await signedIn();
+    const u = await signedIn(true);
     const r = await convertNo(await getDb(), { userId: u.id, wheelId, wedgeIds, shares });
     after(() => requote(wheelId));
     revalidatePath("/", "layout");
@@ -404,7 +412,7 @@ export async function proposeSettlementAction(input: {
   evidence: string;
 }): Promise<ActionResult> {
   return attempt(async () => {
-    const u = await signedIn();
+    const u = await signedIn(true);
     let outcome: SettlementOutcome;
     let winningWedgeId: string | undefined;
     if (input.choice.startsWith("wedge:")) {
@@ -569,5 +577,16 @@ export async function updateProfileAction(name: string): Promise<ActionResult> {
     }
     revalidatePath("/", "layout");
     return { ok: true, message: "Saved." };
+  });
+}
+
+// ---------- fair play ----------
+
+export async function acceptFairPlayAction(): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await (await getDb()).update(users).set({ fairPlayAcceptedAt: new Date() }).where(eq(users.id, u.id));
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Thanks! Happy trading." };
   });
 }
