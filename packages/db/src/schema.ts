@@ -118,6 +118,10 @@ export const users = pgTable(
     suspendReason: text("suspend_reason"),
     /** When they ticked the fair-play rules (no insider trading etc). Null until they do. */
     fairPlayAcceptedAt: ts("fair_play_accepted_at"),
+    /** When they finished or skipped the "How it works" tour. Null until they do. */
+    tourSeenAt: ts("tour_seen_at"),
+    /** When they ticked "I understand how the markets work". Null if they skipped. */
+    tourConfirmedAt: ts("tour_confirmed_at"),
     /** Short code in this person's invite link (/r/<code>). Created the first time they need it. */
     referralCode: text("referral_code").unique(),
     /** Who invited them, set when they sign up through an invite link. */

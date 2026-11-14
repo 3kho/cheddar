@@ -21,13 +21,18 @@ async function freeName(db: Awaited<ReturnType<typeof getDb>>, base: string | nu
 }
 
 /**
- * Where to send someone right after they sign in with Hack Club Auth: the fair-play page if they
- * haven't accepted it yet, otherwise wherever they were headed. Nobody has to link Hackatime: their
- * hours are looked up by their Slack id (linking is only a fallback, see hackatimeStatus).
+ * Where to send someone right after they sign in with Hack Club Auth: the "How it works" tour if
+ * they haven't seen it, then the fair-play page if they haven't accepted it, then wherever they
+ * were headed. Nobody has to link Hackatime: their hours are looked up by their Slack id (linking
+ * is only a fallback, see hackatimeStatus).
  */
 export async function nextStepAfterLogin(userId: string, returnTo: string): Promise<string> {
   const db = await getDb();
-  const [u] = await db.select({ fairPlay: users.fairPlayAcceptedAt }).from(users).where(eq(users.id, userId));
+  const [u] = await db
+    .select({ fairPlay: users.fairPlayAcceptedAt, tour: users.tourSeenAt })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!u?.tour) return `/how-it-works?returnTo=${encodeURIComponent(returnTo)}`;
   return fairPlayStep(!!u?.fairPlay, returnTo);
 }
 

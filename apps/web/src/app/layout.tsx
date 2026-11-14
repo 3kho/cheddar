@@ -74,6 +74,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </p>
           </div>
         )}
+        {user && !user.hasSeenTour && (
+          <div className="border-b border-line bg-accent-soft">
+            <p className="mx-auto flex max-w-[1350px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+              <span>
+                <strong>New here? Take the 2-minute tour</strong> of how Cheddar works.
+              </span>
+              <Link href="/how-it-works" className="font-semibold underline underline-offset-2">
+                Start the tour
+              </Link>
+            </p>
+          </div>
+        )}
         {user && !user.hasAcceptedFairPlay && (
           <div className="border-b border-line bg-accent-soft">
             <p className="mx-auto flex max-w-[1350px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
@@ -143,6 +155,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/?sort=resolved" className="hover:text-ink">Resolved</Link>
               <Link href="/activity" className="hover:text-ink">Activity</Link>
               <Link href="/leaderboard" className="hover:text-ink">Leaderboard</Link>
+              <Link href="/how-it-works" className="hover:text-ink">How it works</Link>
               <Link href="/propose" className="hover:text-ink">Propose a wheel</Link>
               <Link href="/portfolio" className="hover:text-ink">Portfolio</Link>
             </nav>

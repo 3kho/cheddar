@@ -648,3 +648,19 @@ export async function renameUserAction(userId: string, name: string): Promise<Ac
     return { ok: true, message: "Renamed." };
   });
 }
+
+// ---------- tour ----------
+
+/** Called when someone finishes the tour (`understood` ticked) or skips it. */
+export async function finishTourAction(understood: boolean): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    const now = new Date();
+    await (await getDb())
+      .update(users)
+      .set({ tourSeenAt: now, ...(understood ? { tourConfirmedAt: now } : {}) })
+      .where(eq(users.id, u.id));
+    revalidatePath("/", "layout");
+    return { ok: true, message: understood ? "Great, you're ready." : "Skipped. You can reopen the tour any time from the footer." };
+  });
+}
