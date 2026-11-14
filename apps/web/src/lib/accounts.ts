@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, isNull, sql, churnSyncs, oauthTokens, users } from "@cheddar/db";
+import { and, desc, eq, isNull, sql, churnSyncs, mouseFunders, oauthTokens, users } from "@cheddar/db";
 import { syncUser, type ChurnResult } from "@cheddar/exchange";
 import { decrypt, encrypt } from "./crypto";
 import { getDb, getHackatime } from "./db";
@@ -17,6 +17,29 @@ async function freeName(db: Awaited<ReturnType<typeof getDb>>, base: string | nu
     if (!hit) return candidate;
   }
   return `${base} ${Math.floor(Math.random() * 1e6)}`;
+}
+
+/**
+ * Where to send someone right after they sign in with Hack Club Auth: link Hackatime first (it's
+ * how they earn Latta), then the fair-play page, then wherever they were headed. Mouse funders
+ * skip linking: their hours feed The Mouse by Slack ID.
+ */
+export async function nextStepAfterLogin(userId: string, returnTo: string): Promise<string> {
+  const db = await getDb();
+  const [u] = await db
+    .select({ hackatime: users.hackatimeUserId, fairPlay: users.fairPlayAcceptedAt, slackId: users.slackId })
+    .from(users)
+    .where(eq(users.id, userId));
+  const [funder] = u?.slackId
+    ? await db.select({ id: mouseFunders.slackId }).from(mouseFunders).where(and(eq(mouseFunders.slackId, u.slackId), eq(mouseFunders.active, true)))
+    : [];
+  if (!u?.hackatime && !funder) return `/api/hackatime/start?returnTo=${encodeURIComponent(returnTo)}`;
+  return fairPlayStep(!!u?.fairPlay, returnTo);
+}
+
+/** The fair-play page if they haven't accepted yet, otherwise on to `returnTo`. */
+export function fairPlayStep(accepted: boolean, returnTo: string): string {
+  return accepted ? returnTo : `/welcome?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 /** Create or update the Cheddar user for a Hack Club Auth identity. */

@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import {
   ExchangeError,
+  RATES,
+  cleanName,
+  renameUser,
+  resolveReport,
+  submitReport,
+  takeRate,
   isOtherLabel,
   addMouseFunder,
   addOutcome,
@@ -36,7 +42,7 @@ import { and, eq, ne, sql, users } from "@cheddar/db";
 import { hackatimeToken, syncNow } from "./accounts";
 import { getDb, getExchange, getHackatime } from "./db";
 import { env } from "./env";
-import { MAX_NAME_LENGTH, formatLatta, parseLatta } from "./format";
+import { formatLatta, parseLatta } from "./format";
 import { DEFAULT_SLIPPAGE, capLevels, levelsFor, quoteBuy, quoteSell } from "./market";
 import { requote, requoteAll, requoteForWedge } from "./mouse-job";
 import { depthFor, wheelChances } from "./queries";
@@ -89,6 +95,7 @@ export interface TradeInput {
 export async function placeOrderAction(input: TradeInput): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn(true);
+    await takeRate(await getDb(), u.id, RATES.order);
     const ex = await getExchange();
     const label = `${input.side === "BUY" ? "Bought" : "Sold"} ${input.outcome === "YES" ? "Yes" : "No"}`;
 
@@ -228,6 +235,7 @@ function parseClose(v: string | null | undefined): Date | null {
 export async function submitProposalAction(input: ProposalFormInput): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn(true);
+    await takeRate(await getDb(), u.id, RATES.proposal);
     await submitProposal(await getDb(), { proposerId: u.id, ...proposalFields(input) });
     revalidatePath("/propose");
     revalidatePath("/cheesemongers");
@@ -287,6 +295,7 @@ export async function updateWheelAction(
 export async function requestOutcomeAction(wheelId: string, label: string, note: string): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn(true);
+    await takeRate(await getDb(), u.id, RATES.outcomeRequest);
     const r = await requestOutcome(await getDb(), { wheelId, userId: u.id, label, note });
     revalidatePath("/", "layout");
     return { ok: true, message: `Suggested “${r.label}”. A Cheesemonger will look at it.` };
@@ -556,10 +565,7 @@ export async function resumeWheelAction(wheelId: string): Promise<ActionResult> 
 export async function updateProfileAction(name: string): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
-    const clean = name.replace(/\s+/g, " ").trim();
-    if (!clean) return fail("Pick a name.");
-    if ([...clean].length > MAX_NAME_LENGTH) return fail(`Keep it to ${MAX_NAME_LENGTH} characters or fewer.`);
-    if (/[\p{Cc}\p{Cf}]/u.test(clean)) return fail("That name has characters we can't show.");
+    const clean = cleanName(name);
     const db = await getDb();
     const taken = "That name is taken. Try another.";
     const [other] = await db
@@ -569,6 +575,7 @@ export async function updateProfileAction(name: string): Promise<ActionResult> {
       .limit(1);
     if (other) return fail(taken);
     try {
+      if (clean !== u.name) await takeRate(db, u.id, RATES.rename);
       await db.update(users).set({ name: clean }).where(eq(users.id, u.id));
     } catch (e) {
       // Lost a race with someone claiming the same name: the unique index caught it.
@@ -588,5 +595,34 @@ export async function acceptFairPlayAction(): Promise<ActionResult> {
     await (await getDb()).update(users).set({ fairPlayAcceptedAt: new Date() }).where(eq(users.id, u.id));
     revalidatePath("/", "layout");
     return { ok: true, message: "Thanks! Happy trading." };
+  });
+}
+
+// ---------- reports & renames ----------
+
+export async function reportAction(targetType: "wheel" | "user", targetId: string, reason: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await submitReport(await getDb(), { reporterId: u.id, targetType, targetId, reason });
+    revalidatePath("/cheesemongers");
+    return { ok: true, message: "Thanks, a Cheesemonger will take a look." };
+  });
+}
+
+export async function resolveReportAction(reportId: string, result: "actioned" | "dismissed", note: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await resolveReport(await getDb(), { reportId, actorId: u.id, action: result, note });
+    revalidatePath("/cheesemongers");
+    return { ok: true, message: result === "actioned" ? "Marked as handled." : "Dismissed." };
+  });
+}
+
+export async function renameUserAction(userId: string, name: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await renameUser(await getDb(), { userId, actorId: u.id, name, reason: "Renamed by a Cheesemonger" });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Renamed." };
   });
 }

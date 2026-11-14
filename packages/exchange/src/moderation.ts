@@ -1,7 +1,7 @@
 /**
  * Cheesemonger moderation. Every action is checked, applied and logged in one transaction.
  */
-import { and, asc, eq, users, wedges, wheels, type AnyDb, type Tx } from "@cheddar/db";
+import { and, asc, eq, ne, sql, users, wedges, wheels, type AnyDb, type Tx } from "@cheddar/db";
 import { ExchangeError, runTx } from "./errors";
 import { cancelUserOrders } from "./exchange";
 import { logEvent } from "./log";
@@ -66,6 +66,42 @@ export async function unsuspendUser(db: AnyDb, input: { userId: string; actorId:
       targetType: "user",
       targetId: u.id,
       details: { name: u.name, slackId: u.slackId, note: input.note ?? null, wasSuspendedFor: u.suspendReason },
+    });
+  });
+}
+
+export const MAX_NAME_LENGTH = 32;
+
+/** Tidy a display name: collapse spaces, 1..32 characters, nothing invisible. */
+export function cleanName(raw: string): string {
+  const name = raw.replace(/\s+/g, " ").trim();
+  if (!name) throw new ExchangeError("INVALID", "Pick a name.");
+  if ([...name].length > MAX_NAME_LENGTH) throw new ExchangeError("INVALID", `Keep it to ${MAX_NAME_LENGTH} characters or fewer.`);
+  if (/[\p{Cc}\p{Cf}]/u.test(name)) throw new ExchangeError("INVALID", "That name has characters we can't show.");
+  return name;
+}
+
+/** A Cheesemonger changes someone's display name (e.g. an offensive one). Names stay unique. */
+export async function renameUser(db: AnyDb, input: { userId: string; actorId: string; name: string; reason: string }) {
+  const name = cleanName(input.name);
+  const reason = requireText(input.reason, "reason", 500);
+  await runTx(db, async (tx) => {
+    await assertCheesemonger(tx, input.actorId);
+    const u = await lockUser(tx, input.userId);
+    if (u.isBot) throw new ExchangeError("INVALID", "bots can't be renamed");
+    const [clash] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(sql`lower(${users.name}) = lower(${name})`, ne(users.id, u.id)))
+      .limit(1);
+    if (clash) throw new ExchangeError("INVALID", "that name is taken");
+    await tx.update(users).set({ name }).where(eq(users.id, u.id));
+    await logEvent(tx, {
+      actorId: input.actorId,
+      action: "user.rename",
+      targetType: "user",
+      targetId: u.id,
+      details: { from: u.name, to: name, slackId: u.slackId, reason },
     });
   });
 }

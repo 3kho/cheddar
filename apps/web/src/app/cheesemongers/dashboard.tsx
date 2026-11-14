@@ -8,6 +8,8 @@ import { Avatar, WheelIcon } from "@/components/Logo";
 import {
   pauseWheelAction,
   removeFunderAction,
+  renameUserAction,
+  resolveReportAction,
   resumeWheelAction,
   reviewOutcomeAction,
   reviewProposalAction,
@@ -27,14 +29,17 @@ import {
   dashboardCounts,
   moderationWheels,
   mouseStatus,
+  openReports,
   pendingOutcomeRequests,
   pendingProposals,
   pendingSettlements,
   searchUsers,
+  watchLateBuys,
+  watchPairs,
 } from "@/lib/queries";
 import { requireCheesemonger, requireSuperAdmin, type SessionUser } from "@/lib/session";
 
-const CHEESEMONGER_TABS = ["proposals", "outcomes", "settlements", "wheels"] as const;
+const CHEESEMONGER_TABS = ["proposals", "outcomes", "settlements", "reports", "watch", "wheels"] as const;
 const ADMIN_TABS = ["users", "funders", "logs", "health"] as const;
 type Tab = (typeof CHEESEMONGER_TABS)[number] | (typeof ADMIN_TABS)[number];
 export type DashboardSP = { tab?: string; page?: string; q?: string; filter?: string; action?: string };
@@ -55,6 +60,8 @@ export async function Dashboard({ area, searchParams }: { area: "cheesemongers" 
     proposals: { label: "Wheel proposals", count: counts.proposals, alert: counts.proposals > 0 },
     outcomes: { label: "New outcomes", count: counts.outcomes, alert: counts.outcomes > 0 },
     settlements: { label: "Settlements", count: counts.settlements, alert: counts.settlements > 0 },
+    reports: { label: "Reports", count: counts.reports, alert: counts.reports > 0 },
+    watch: { label: "Watch" },
     wheels: { label: "Wheels", count: counts.paused || undefined },
     users: { label: "Users", count: counts.suspended || undefined },
     funders: { label: "Mouse funders", count: counts.funders },
@@ -112,6 +119,8 @@ export async function Dashboard({ area, searchParams }: { area: "cheesemongers" 
         {tab === "proposals" && <ProposalsTab me={me} page={page} />}
         {tab === "outcomes" && <OutcomesTab me={me} />}
         {tab === "settlements" && <SettlementsTab me={me} />}
+        {tab === "reports" && <ReportsTab />}
+        {tab === "watch" && <WatchTab />}
         {tab === "wheels" && <WheelsTab q={sp.q} page={page} />}
         {tab === "users" && <UsersTab me={me} q={sp.q} filter={sp.filter} page={page} />}
         {tab === "funders" && <FundersTab />}
@@ -399,6 +408,7 @@ async function UsersTab({ me, q, filter, page }: { me: SessionUser; q?: string; 
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                {!u.isBot && <ReasonAction action={renameUserAction.bind(null, u.id)} label="Rename" placeholder="New name" />}
                 {u.id !== me.id &&
                   (u.suspendedAt ? (
                     <ReasonAction action={unsuspendUserAction.bind(null, u.id)} label="Unsuspend" placeholder="Note (optional)" optional />
@@ -435,6 +445,95 @@ async function UsersTab({ me, q, filter, page }: { me: SessionUser; q?: string; 
         </ul>
       )}
       <Pager tab="users" page={page} total={total} size={PAGE_SIZE.users} extra={{ q, filter: f === "all" ? undefined : f }} />
+    </div>
+  );
+}
+
+async function ReportsTab() {
+  const rows = await openReports();
+  if (!rows.length) return <Empty>No open reports.</Empty>;
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">{rows.length} open, oldest first. Deal with it, then mark it handled or dismiss it.</p>
+      {rows.map((r) => (
+        <article key={r.id} className="rounded-xl border border-line bg-surface p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="font-semibold">
+              {r.targetType === "wheel" ? (
+                <Link href={`/wheel/${r.wheelSlug}`} className="hover:underline">
+                  {r.wheelTitle ?? "A wheel"}
+                </Link>
+              ) : (
+                <>Name: {r.userName ?? r.userSlack ?? "a user"}</>
+              )}
+            </h3>
+            <span className="text-xs text-muted">
+              {r.targetType === "wheel" ? "Wheel" : "User"} · reported by {r.reporterName ?? r.reporterSlack ?? "someone"} · {formatDate(new Date(r.createdAt))}
+            </span>
+          </div>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{r.reason}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            {r.targetType === "user" && <ReasonAction action={renameUserAction.bind(null, r.targetId)} label="Rename them" placeholder="New name" />}
+            <ReasonAction action={resolveReportAction.bind(null, r.id, "actioned")} label="Mark handled" placeholder="What you did (optional)" optional />
+            <ReasonAction action={resolveReportAction.bind(null, r.id, "dismissed")} label="Dismiss" placeholder="Why (optional)" optional />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+async function WatchTab() {
+  const [pairs, late] = await Promise.all([watchPairs(), watchLateBuys()]);
+  return (
+    <div className="space-y-8">
+      <section>
+        <h2 className="text-base font-semibold">Trading back and forth</h2>
+        <p className="mb-3 mt-0.5 text-sm text-muted">
+          Pairs of people who traded with each other 5+ times in the last 7 days. Often just friends on a busy market, but worth a look for wash trading or alts.
+        </p>
+        {!pairs.length ? (
+          <Empty>Nothing unusual.</Empty>
+        ) : (
+          <ul className="divide-y divide-line rounded-xl border border-line bg-surface">
+            {pairs.map((p) => (
+              <li key={`${p.aId}-${p.bId}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                <span className="font-medium">
+                  {p.aName ?? "Hack Clubber"} <span className="text-muted">↔</span> {p.bName ?? "Hack Clubber"}
+                </span>
+                <span className="tabular text-muted">
+                  {p.trades} trades · {p.shares} shares · {p.wedges} market{p.wedges === 1 ? "" : "s"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section>
+        <h2 className="text-base font-semibold">Big buys just before a result</h2>
+        <p className="mb-3 mt-0.5 text-sm text-muted">
+          People who bought 100+ shares in the 24 hours before a result was proposed (last 30 days). Possible insider trading, so check what they could have known.
+        </p>
+        {!late.length ? (
+          <Empty>Nothing unusual.</Empty>
+        ) : (
+          <ul className="divide-y divide-line rounded-xl border border-line bg-surface">
+            {late.map((l) => (
+              <li key={`${l.userId}-${l.wheelSlug}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                <span className="min-w-0">
+                  <span className="font-medium">{l.userName ?? "Hack Clubber"}</span> <span className="text-muted">on</span>{" "}
+                  <Link href={`/wheel/${l.wheelSlug}`} className="hover:underline">
+                    {l.wheelTitle}
+                  </Link>
+                </span>
+                <span className="tabular text-muted">
+                  {l.shares} shares · {l.trades} trade{l.trades === 1 ? "" : "s"} · latest {l.minutesBefore} min before
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

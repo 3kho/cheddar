@@ -539,6 +539,49 @@ export const auditLog = pgTable(
   ],
 );
 
+// ---------- reports & rate limits ----------
+
+/** Someone flagging a wheel or a user (name) for the Cheesemongers to look at. */
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    reporterId: uuid("reporter_id")
+      .notNull()
+      .references(() => users.id),
+    targetType: text("target_type").notNull(),
+    targetId: uuid("target_id").notNull(),
+    reason: text("reason").notNull(),
+    /** open -> actioned (the Cheesemonger did something) or dismissed. */
+    status: text("status").notNull().default("open"),
+    resolverId: uuid("resolver_id").references(() => users.id),
+    resolverNote: text("resolver_note"),
+    resolvedAt: ts("resolved_at"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    check("reports_target_type", sql`${t.targetType} IN ('wheel', 'user')`),
+    check("reports_status", sql`${t.status} IN ('open', 'actioned', 'dismissed')`),
+    // One open report per person per target; they can report again once it's been handled.
+    uniqueIndex("reports_one_open_uq").on(t.reporterId, t.targetType, t.targetId).where(sql`${t.status} = 'open'`),
+    index("reports_status_idx").on(t.status, t.createdAt),
+  ],
+);
+
+/** One row per rate-limited action, so "how many in the last N seconds" is a count. Pruned as it's read. */
+export const rateEvents = pgTable(
+  "rate_events",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    key: text("key").notNull(),
+    at: ts("at").notNull().defaultNow(),
+  },
+  (t) => [index("rate_events_user_key_idx").on(t.userId, t.key, t.at)],
+);
+
 // ---------- churn (Hackatime -> Latta) ----------
 
 export const churnSyncs = pgTable(

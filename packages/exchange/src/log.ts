@@ -20,6 +20,8 @@ export type AuditAction =
   | "user.unsuspend"
   | "user.promote"
   | "user.demote"
+  | "user.rename"
+  | "report.resolve"
   | "user.super_admin"
   | "user.super_admin_remove"
   | "wheel.pause"
@@ -31,7 +33,7 @@ export interface AuditEvent {
   /** Null for system jobs. */
   actorId: string | null;
   action: AuditAction;
-  targetType?: "proposal" | "settlement" | "wheel" | "user" | "funder" | "outcome";
+  targetType?: "proposal" | "settlement" | "wheel" | "user" | "funder" | "outcome" | "report";
   targetId?: string;
   details?: Record<string, unknown>;
 }

@@ -242,12 +242,18 @@ export async function getWheel(slug: string) {
       .orderBy(desc(settlements.createdAt))
       .limit(1),
   ]);
+  const s = settlement[0] ?? null;
+  const people = s ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, [s.proposerId, ...(s.reviewerId ? [s.reviewerId] : [])])) : [];
+  const nameOf = (id: string | null | undefined) => people.find((p) => p.id === id)?.name ?? null;
   return {
     wheel: toWheelView(w.wheel, ws),
     creatorName: w.creatorName,
     depth,
     history,
-    settlement: settlement[0] ?? null,
+    settlement: s,
+    /** Who proposed the result and which Cheesemonger approved it, shown on the wheel. */
+    settlementProposedBy: nameOf(s?.proposerId),
+    settlementBy: nameOf(s?.reviewerId),
   };
 }
 
@@ -352,10 +358,11 @@ export async function dashboardCounts() {
       (SELECT COUNT(*) FROM proposals WHERE status = 'pending')::int AS proposals,
       (SELECT COUNT(*) FROM settlements WHERE status = 'pending')::int AS settlements,
       (SELECT COUNT(*) FROM outcome_requests WHERE status = 'pending')::int AS outcomes,
+      (SELECT COUNT(*) FROM reports WHERE status = 'open')::int AS reports,
       (SELECT COUNT(*) FROM mouse_funders WHERE active)::int AS funders,
       (SELECT COUNT(*) FROM users WHERE suspended_at IS NOT NULL)::int AS suspended,
       (SELECT COUNT(*) FROM wheels WHERE trading_paused_at IS NOT NULL AND status NOT IN ('resolved', 'moldy'))::int AS paused
-  `)) as unknown as { rows: { proposals: number; settlements: number; outcomes: number; funders: number; suspended: number; paused: number }[] };
+  `)) as unknown as { rows: { proposals: number; settlements: number; outcomes: number; reports: number; funders: number; suspended: number; paused: number }[] };
   return r.rows[0]!;
 }
 
@@ -948,4 +955,77 @@ export async function mouseStatus() {
     openWheels: Number(x.open_wheels),
     fedTicks: Number(x.fed),
   };
+}
+
+// ---------- reports & watch ----------
+
+/** Open reports (oldest first) with who sent them and what they point at. */
+export async function openReports() {
+  const db = await getDb();
+  const r = (await db.execute(sql`
+    SELECT r.id, r.target_type AS "targetType", r.target_id AS "targetId", r.reason, r.created_at AS "createdAt",
+           rep.name AS "reporterName", rep.slack_id AS "reporterSlack",
+           w.title AS "wheelTitle", w.slug AS "wheelSlug",
+           tu.name AS "userName", tu.slack_id AS "userSlack"
+    FROM reports r
+    JOIN users rep ON rep.id = r.reporter_id
+    LEFT JOIN wheels w ON r.target_type = 'wheel' AND w.id = r.target_id
+    LEFT JOIN users tu ON r.target_type = 'user' AND tu.id = r.target_id
+    WHERE r.status = 'open'
+    ORDER BY r.created_at
+    LIMIT 100
+  `)) as unknown as {
+    rows: {
+      id: string; targetType: "wheel" | "user"; targetId: string; reason: string; createdAt: string | Date;
+      reporterName: string | null; reporterSlack: string | null;
+      wheelTitle: string | null; wheelSlug: string | null; userName: string | null; userSlack: string | null;
+    }[];
+  };
+  return r.rows;
+}
+
+/** Pairs of people who keep trading with each other (possible wash trading), last 7 days. */
+export async function watchPairs() {
+  const db = await getDb();
+  const r = (await db.execute(sql`
+    SELECT ua.id AS "aId", ua.name AS "aName", ub.id AS "bId", ub.name AS "bName",
+           COUNT(DISTINCT t.id)::int AS trades, COALESCE(SUM(t.qty), 0)::int AS shares,
+           COUNT(DISTINCT t.wedge_id)::int AS wedges
+    FROM trade_legs a
+    JOIN trade_legs b ON b.trade_id = a.trade_id AND a.user_id < b.user_id
+    JOIN trades t ON t.id = a.trade_id
+    JOIN users ua ON ua.id = a.user_id AND NOT ua.is_bot
+    JOIN users ub ON ub.id = b.user_id AND NOT ub.is_bot
+    WHERE t.created_at > now() - interval '7 days'
+    GROUP BY ua.id, ua.name, ub.id, ub.name
+    HAVING COUNT(DISTINCT t.id) >= 5
+    ORDER BY trades DESC
+    LIMIT 25
+  `)) as unknown as { rows: { aId: string; aName: string | null; bId: string; bName: string | null; trades: number; shares: number; wedges: number }[] };
+  return r.rows;
+}
+
+/** Big buys made shortly before a settlement was proposed (possible insider trading), last 30 days. */
+export async function watchLateBuys() {
+  const db = await getDb();
+  const r = (await db.execute(sql`
+    SELECT u.id AS "userId", u.name AS "userName", w.title AS "wheelTitle", w.slug AS "wheelSlug",
+           s.created_at AS "proposedAt", COUNT(DISTINCT t.id)::int AS trades,
+           SUM(l.shares)::int AS shares,
+           MIN(EXTRACT(EPOCH FROM (s.created_at - t.created_at)) / 60)::int AS "minutesBefore"
+    FROM settlements s
+    JOIN wheels w ON w.id = s.wheel_id
+    JOIN wedges wd ON wd.wheel_id = w.id
+    JOIN trades t ON t.wedge_id = wd.id AND t.created_at BETWEEN s.created_at - interval '24 hours' AND s.created_at
+    JOIN trade_legs l ON l.trade_id = t.id AND l.shares > 0
+    JOIN users u ON u.id = l.user_id AND NOT u.is_bot
+    WHERE s.status IN ('pending', 'approved') AND s.created_at > now() - interval '30 days'
+    GROUP BY u.id, u.name, w.title, w.slug, s.created_at
+    HAVING SUM(l.shares) >= 100
+    ORDER BY SUM(l.shares) DESC
+    LIMIT 25
+  `)) as unknown as {
+    rows: { userId: string; userName: string | null; wheelTitle: string; wheelSlug: string; proposedAt: string | Date; trades: number; shares: number; minutesBefore: number }[];
+  };
+  return r.rows;
 }

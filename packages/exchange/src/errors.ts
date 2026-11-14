@@ -6,6 +6,7 @@ export type ExchangeErrorCode =
   | "MARKET_CLOSED"
   | "NOT_FOUND"
   | "FORBIDDEN"
+  | "RATE_LIMITED"
   | "INVALID";
 
 /** Expected, user-facing failures. Anything else is a bug or an infrastructure error. */

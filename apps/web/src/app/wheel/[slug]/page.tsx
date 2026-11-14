@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
+import { ReportButton } from "@/components/ReportButton";
 import { Change, CheeseIcon, ClockIcon, ListPlusIcon, MoldIcon, MouseIcon, PauseIcon, PencilIcon, ShieldIcon, TickIcon } from "@/components/Icons";
 import { LinkedActions } from "@/components/LinkedActions";
 import { Linkified } from "@/components/Linkified";
@@ -56,7 +57,7 @@ export default async function WheelPage({
   const [{ slug }, sp, user] = await Promise.all([params, searchParams, currentUser()]);
   const data = await getWheel(slug);
   if (!data) notFound();
-  const { wheel, depth, history, settlement, creatorName } = data;
+  const { wheel, depth, history, settlement, creatorName, settlementBy, settlementProposedBy } = data;
   const binary = wheel.wedges.length === 1;
   const pair = wheel.wedges.length === 2;
   const done = wheel.status === "resolved" || wheel.status === "moldy";
@@ -284,6 +285,7 @@ export default async function WheelPage({
             </div>
             <h1 className="text-pretty text-xl font-semibold leading-7 tracking-[-0.015em] sm:text-2xl">{wheel.title}</h1>
           </div>
+          {user && !user.isSuspended && wheel.creatorId !== user.id && <ReportButton targetType="wheel" targetId={wheel.id} />}
           {user?.isCheesemonger && !done && (
             <Link
               href={`/wheel/${wheel.slug}/edit`}
@@ -311,7 +313,9 @@ export default async function WheelPage({
                 <h2 className="text-lg font-semibold leading-6">{resolved}</h2>
                 <p className="text-sm text-muted">
                   {wheel.status === "moldy" ? "Voided. Every share paid 0.50 Lc." : "Winning shares paid 1 Lc each; the rest paid nothing."}
-                  {settlement?.reviewedAt && ` Ripened ${formatDate(settlement.reviewedAt)}.`}
+                  {settlement?.reviewedAt && ` Ripened ${formatDate(settlement.reviewedAt)}`}
+                  {settlement?.reviewedAt && (settlementBy ? ` by ${settlementBy}.` : ".")}
+                  {settlementProposedBy && ` Result proposed by ${settlementProposedBy}.`}
                 </p>
               </div>
             </div>
