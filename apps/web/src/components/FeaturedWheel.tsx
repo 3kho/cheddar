@@ -23,12 +23,12 @@ export function FeaturedWheel({
   const w0 = wheel.wedges[0]!;
   const ranked = [...wheel.wedges].sort((a, b) => (b.chance ?? -1) - (a.chance ?? -1)).slice(0, 4);
   return (
-    <section className="flex min-h-[420px] flex-col rounded-[18px] bg-surface p-5 pb-4 shadow-mid">
+    <section className="flex min-h-[560px] flex-col rounded-[18px] bg-surface p-5 pb-4 shadow-mid">
       <header className="flex items-center gap-4">
         <WheelIcon icon={wheel.icon} category={wheel.category} size={56} />
         <div className="min-w-0">
           <div className="text-[13px] font-semibold text-muted">{wheel.category ?? "Cheddar"}</div>
-          <Link href={href} className="line-clamp-2 text-xl font-semibold leading-7 tracking-[-0.015em] hover:underline sm:text-2xl">
+          <Link href={href} className="line-clamp-2 min-h-14 text-xl font-semibold leading-7 tracking-[-0.015em] hover:underline sm:text-2xl">
             {wheel.title}
           </Link>
         </div>
@@ -36,6 +36,8 @@ export function FeaturedWheel({
 
       <div className="mt-5 flex flex-1 flex-col gap-6 md:flex-row">
         <div className="flex flex-col md:w-[40%]">
+          {/* Same height for Yes/No and multi-outcome so every card in the carousel lines up. */}
+          <div className="min-h-[216px]">
           {binary ? (
             <>
               <div className="flex items-baseline gap-2">
@@ -69,9 +71,10 @@ export function FeaturedWheel({
               ))}
             </ul>
           )}
+          </div>
           <div className="mt-auto pt-4">
             <TradeTicker trades={trades} />
-            <p className="mt-3 line-clamp-3 text-[13px] leading-5 text-muted">{wheel.description || wheel.resolutionCriteria}</p>
+            <p className="mt-3 line-clamp-3 min-h-[60px] text-[13px] leading-5 text-muted">{wheel.description || wheel.resolutionCriteria}</p>
           </div>
         </div>
         <div className="min-w-0 md:w-[60%]">
