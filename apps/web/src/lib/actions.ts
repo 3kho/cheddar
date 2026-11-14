@@ -31,10 +31,11 @@ import {
   withdrawProposal,
   type SettlementOutcome,
 } from "@cheddar/exchange";
+import { and, eq, ne, sql, users } from "@cheddar/db";
 import { hackatimeToken, syncNow } from "./accounts";
 import { getDb, getExchange, getHackatime } from "./db";
 import { env } from "./env";
-import { formatLatta, parseLatta } from "./format";
+import { MAX_NAME_LENGTH, formatLatta, parseLatta } from "./format";
 import { DEFAULT_SLIPPAGE, capLevels, levelsFor, quoteBuy, quoteSell } from "./market";
 import { requote, requoteAll, requoteForWedge } from "./mouse-job";
 import { depthFor, wheelChances } from "./queries";
@@ -539,5 +540,34 @@ export async function resumeWheelAction(wheelId: string): Promise<ActionResult> 
     after(() => requote(wheelId));
     revalidatePath("/", "layout");
     return { ok: true, message: "Trading resumed." };
+  });
+}
+
+// ---------- profile ----------
+
+export async function updateProfileAction(name: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    const clean = name.replace(/\s+/g, " ").trim();
+    if (!clean) return fail("Pick a name.");
+    if ([...clean].length > MAX_NAME_LENGTH) return fail(`Keep it to ${MAX_NAME_LENGTH} characters or fewer.`);
+    if (/[\p{Cc}\p{Cf}]/u.test(clean)) return fail("That name has characters we can't show.");
+    const db = await getDb();
+    const taken = "That name is taken. Try another.";
+    const [other] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(sql`lower(${users.name}) = lower(${clean})`, ne(users.id, u.id)))
+      .limit(1);
+    if (other) return fail(taken);
+    try {
+      await db.update(users).set({ name: clean }).where(eq(users.id, u.id));
+    } catch (e) {
+      // Lost a race with someone claiming the same name: the unique index caught it.
+      if ((e as { code?: string; cause?: { code?: string } })?.code === "23505" || (e as { cause?: { code?: string } })?.cause?.code === "23505") return fail(taken);
+      throw e;
+    }
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Saved." };
   });
 }

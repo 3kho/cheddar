@@ -116,6 +116,8 @@ export const users = pgTable(
   (t) => [
     // Humans sign in with HCA. The exception: Mouse funders added by Slack ID before they
     // ever sign up get a placeholder (hca_sub NULL), claimed by Slack ID on first login.
+    // Display names are unique, ignoring case. NULL names (placeholders) don't collide.
+    uniqueIndex("users_name_lower_uq").on(sql`lower(${t.name})`),
     check("users_identified", sql`${t.isBot} OR ${t.hcaSub} IS NOT NULL OR ${t.slackId} IS NOT NULL`),
     check("users_bot_role_only_for_bots", sql`${t.botRole} IS NULL OR ${t.isBot}`),
   ],

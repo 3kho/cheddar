@@ -80,3 +80,6 @@ export function timeAgo(d: Date | string, now = Date.now()): string {
   if (s < 30 * 86_400) return `${Math.floor(s / 86_400)}d ago`;
   return formatDate(d);
 }
+
+/** Longest display name a user can pick on /profile. */
+export const MAX_NAME_LENGTH = 32;

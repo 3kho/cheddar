@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, isNull, churnSyncs, oauthTokens, users } from "@cheddar/db";
+import { and, desc, eq, isNull, sql, churnSyncs, oauthTokens, users } from "@cheddar/db";
 import { syncUser, type ChurnResult } from "@cheddar/exchange";
 import { decrypt, encrypt } from "./crypto";
 import { getDb, getHackatime } from "./db";
@@ -8,13 +8,26 @@ import { OAuthError } from "./oauth";
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
+/** `base`, or `base 2`, `base 3`... if another account already has it (names are unique, ignoring case). */
+async function freeName(db: Awaited<ReturnType<typeof getDb>>, base: string | null): Promise<string | null> {
+  if (!base) return null;
+  for (let n = 1; n < 50; n++) {
+    const candidate = n === 1 ? base : `${base} ${n}`;
+    const [hit] = await db.select({ id: users.id }).from(users).where(sql`lower(${users.name}) = lower(${candidate})`).limit(1);
+    if (!hit) return candidate;
+  }
+  return `${base} ${Math.floor(Math.random() * 1e6)}`;
+}
+
 /** Create or update the Cheddar user for a Hack Club Auth identity. */
 export async function upsertHcaUser(claims: Record<string, unknown>): Promise<string> {
   const sub = str(claims.sub);
   if (!sub) throw new OAuthError("Hack Club Auth did not return an account id.");
   const slackId = str(claims.slack_id)?.toUpperCase() ?? null;
+  // The HCA name only seeds a brand-new account. Once someone has a name (they can change it on
+  // /profile) logging in never overwrites it.
+  const hcaName = str(claims.nickname) ?? str(claims.name);
   const profile = {
-    name: str(claims.nickname) ?? str(claims.name),
     email: str(claims.email),
     slackId,
     verificationStatus: str(claims.verification_status),
@@ -23,6 +36,7 @@ export async function upsertHcaUser(claims: Record<string, unknown>): Promise<st
   const promote = superAdmin || (!!slackId && env.cheesemongerSlackIds.includes(slackId));
   const roles = { ...(promote ? { isCheesemonger: true } : {}), ...(superAdmin ? { isSuperAdmin: true } : {}) };
   const db = await getDb();
+  const seedName = await freeName(db, hcaName);
 
   // First login of someone a Cheesemonger added as a Mouse funder before they signed up:
   // take over that placeholder so their Churn history (and The Mouse's credit) carries over.
@@ -31,7 +45,7 @@ export async function upsertHcaUser(claims: Record<string, unknown>): Promise<st
     if (!known) {
       const [claimed] = await db
         .update(users)
-        .set({ hcaSub: sub, ...profile, ...roles })
+        .set({ hcaSub: sub, ...profile, name: sql`coalesce(${users.name}, ${seedName}::text)`, ...roles })
         .where(and(eq(users.slackId, slackId), isNull(users.hcaSub), eq(users.isBot, false)))
         .returning({ id: users.id });
       if (claimed) return claimed.id;
@@ -40,7 +54,7 @@ export async function upsertHcaUser(claims: Record<string, unknown>): Promise<st
 
   const [row] = await db
     .insert(users)
-    .values({ hcaSub: sub, ...profile, isCheesemonger: promote, isSuperAdmin: superAdmin })
+    .values({ hcaSub: sub, ...profile, name: seedName, isCheesemonger: promote, isSuperAdmin: superAdmin })
     .onConflictDoUpdate({
       target: users.hcaSub,
       set: { ...profile, ...roles },

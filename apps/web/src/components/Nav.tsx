@@ -77,6 +77,7 @@ export async function Nav({ user }: { user: SessionUser | null }) {
                     </div>
                   </div>
                   <MenuLink href="/portfolio">Portfolio</MenuLink>
+                  <MenuLink href="/profile">Edit profile</MenuLink>
                   <MenuLink href="/propose">Propose a wheel</MenuLink>
                   <MenuLink href="/activity">Activity</MenuLink>
                   <MenuLink href="/leaderboard">Leaderboard</MenuLink>
