@@ -29,6 +29,8 @@ import { currentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+const CARD_IMAGE = { url: "/opengraph-image", width: 1200, height: 630, alt: "Cheddar: Hack Club's play-money prediction market" };
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const data = await getWheel((await params).slug);
   if (!data) return { title: "Cheddar" };
@@ -37,8 +39,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return {
     title: `${data.wheel.title} · Cheddar`,
     description,
-    openGraph: { title: data.wheel.title, description },
-    twitter: { title: data.wheel.title, description },
+    // Setting openGraph/twitter here replaces the site-wide ones, so the card image is repeated.
+    openGraph: { title: data.wheel.title, description, images: [CARD_IMAGE] },
+    twitter: { card: "summary_large_image" as const, title: data.wheel.title, description, images: [CARD_IMAGE.url] },
   };
 }
 
