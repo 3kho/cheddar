@@ -4,9 +4,20 @@ import type { WheelView } from "@/lib/queries";
 import { Change, ClockIcon } from "./Icons";
 import { WheelIcon } from "./Logo";
 import { PriceChart, type Series } from "./PriceChart";
+import { TradeTicker, type TickerTrade } from "./TradeTicker";
 
 /** The big card at the top of the home page: the hottest wheel, its outcomes and its chart. */
-export function FeaturedWheel({ wheel, series, now }: { wheel: WheelView; series: Series[]; now: number }) {
+export function FeaturedWheel({
+  wheel,
+  series,
+  now,
+  trades,
+}: {
+  wheel: WheelView;
+  series: Series[];
+  now: number;
+  trades: TickerTrade[];
+}) {
   const href = `/wheel/${wheel.slug}`;
   const binary = wheel.wedges.length === 1;
   const w0 = wheel.wedges[0]!;
@@ -58,7 +69,10 @@ export function FeaturedWheel({ wheel, series, now }: { wheel: WheelView; series
               ))}
             </ul>
           )}
-          <p className="mt-auto line-clamp-3 pt-4 text-[13px] leading-5 text-muted">{wheel.description || wheel.resolutionCriteria}</p>
+          <div className="mt-auto pt-4">
+            <TradeTicker trades={trades} />
+            <p className="mt-3 line-clamp-3 text-[13px] leading-5 text-muted">{wheel.description || wheel.resolutionCriteria}</p>
+          </div>
         </div>
         <div className="min-w-0 md:w-[60%]">
           <PriceChart series={series} now={now} height={230} compact />

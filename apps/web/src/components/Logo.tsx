@@ -1,17 +1,10 @@
+import logo from "@/assets/logo.png";
 import { BASE_ICONS, type BaseIconName } from "./Icons";
 
-/** A cheddar wedge with holes. */
+/** The Cheddar slice. */
 export function Logo({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M3 22 L18 6 L29 13 L29 25 L3 25 Z" fill="var(--accent)" />
-      <path d="M3 22 L29 13 L29 16 L3 25 Z" fill="var(--accent)" opacity="0.65" />
-      <circle cx="12" cy="20.5" r="1.8" fill="var(--bg)" opacity="0.85" />
-      <circle cx="20" cy="17" r="1.3" fill="var(--bg)" opacity="0.85" />
-      <circle cx="24.5" cy="21.5" r="1.6" fill="var(--bg)" opacity="0.85" />
-      <circle cx="18" cy="12" r="1" fill="var(--bg)" opacity="0.85" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={logo.src} width={size} height={size} alt="" aria-hidden="true" className="shrink-0" />;
 }
 
 /** Icon and tint per category, used when a wheel has no icon of its own. */

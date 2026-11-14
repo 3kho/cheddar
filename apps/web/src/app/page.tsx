@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { FeaturedCarousel } from "@/components/FeaturedCarousel";
 import { FeaturedWheel } from "@/components/FeaturedWheel";
+import type { TickerTrade } from "@/components/TradeTicker";
 import { Change, CheeseIcon, SearchIcon } from "@/components/Icons";
 import { WheelIcon } from "@/components/Logo";
 import type { Series } from "@/components/PriceChart";
 import { GettingStarted } from "@/components/GettingStarted";
 import { WheelCard } from "@/components/WheelCard";
 import { onboardingState } from "@/lib/profile";
-import { formatChance, formatLatta } from "@/lib/format";
-import { getWheel, listCategories, listWheels, type WheelSort, type WheelView } from "@/lib/queries";
+import { formatChance, formatLatta, timeAgo } from "@/lib/format";
+import { getWheel, listCategories, listWheels, wheelActivity, type WheelSort, type WheelView } from "@/lib/queries";
 import { currentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,10 @@ const SORTS: Record<string, { sort: WheelSort; title: string }> = {
   mine: { sort: "trending", title: "My wheels" },
   resolved: { sort: "resolved", title: "Resolved" },
 };
+
+/** How many wheels slide through the big card, and how many recent trades each one's ticker holds. */
+const FEATURED_COUNT = 4;
+const TICKER_TRADES = 8;
 
 const top = (w: WheelView) => [...w.wedges].sort((a, b) => (b.chance ?? -1) - (a.chance ?? -1))[0];
 
@@ -38,21 +44,37 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
 
   // Feature the hottest wheel, with movers and hot categories beside it, on the plain front page only.
   const front = !c && !query && mode.sort === "trending" && sort !== "mine";
-  const featured = front && wheels[0] && wheels[0].volumeTicks > 0 ? wheels[0] : null;
+  // The hottest few wheels slide through the big card, each with its latest trades scrolling by.
+  const featuredWheels = front ? wheels.filter((w) => w.volumeTicks > 0).slice(0, FEATURED_COUNT) : [];
+  const featured = featuredWheels[0] ?? null;
+  const featuredIds = new Set(featuredWheels.map((w) => w.id));
   const now = Date.now();
-  let featuredSeries: Series[] = [];
-  if (featured) {
-    const full = await getWheel(featured.slug);
-    const ranked = [...featured.wedges].sort((a, b) => (b.chance ?? -1) - (a.chance ?? -1)).slice(0, 4);
-    featuredSeries = ranked.map((w) => ({
-      label: w.label,
-      chance: w.chance,
-      points: (full?.history ?? []).filter((h) => h.wedgeId === w.id).map((h) => ({ t: h.at.getTime(), p: h.yesPrice })),
-    }));
-  }
+  const slides = await Promise.all(
+    featuredWheels.map(async (fw) => {
+      const [full, activity] = await Promise.all([getWheel(fw.slug), wheelActivity(fw.wedges.map((w) => w.id), TICKER_TRADES)]);
+      const ranked = [...fw.wedges].sort((a, b) => (b.chance ?? -1) - (a.chance ?? -1)).slice(0, 4);
+      const series: Series[] = ranked.map((w) => ({
+        label: w.label,
+        chance: w.chance,
+        points: (full?.history ?? []).filter((h) => h.wedgeId === w.id).map((h) => ({ t: h.at.getTime(), p: h.yesPrice })),
+      }));
+      const labels = new Map(fw.wedges.map((w) => [w.id, w.label]));
+      const trades: TickerTrade[] = activity.map((a) => ({
+        id: a.id,
+        who: a.name ?? "Someone",
+        side: a.side,
+        outcome: a.outcome,
+        qty: a.qty,
+        price: a.price,
+        label: fw.wedges.length > 1 ? (labels.get(a.wedgeId) ?? null) : null,
+        ago: timeAgo(a.at, now),
+      }));
+      return { wheel: fw, series, trades };
+    }),
+  );
   const movers = featured
     ? wheels
-        .filter((w) => w.id !== featured.id && top(w)?.change24h)
+        .filter((w) => !featuredIds.has(w.id) && top(w)?.change24h)
         .sort((a, b) => Math.abs(top(b)!.change24h!) - Math.abs(top(a)!.change24h!))
         .slice(0, 4)
     : [];
@@ -87,7 +109,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
 
       {featured && (
         <div className="mb-10 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_362px]">
-          <FeaturedWheel wheel={featured} series={featuredSeries} now={now} />
+          <FeaturedCarousel>
+            {slides.map((s) => (
+              <FeaturedWheel key={s.wheel.id} wheel={s.wheel} series={s.series} now={now} trades={s.trades} />
+            ))}
+          </FeaturedCarousel>
           <aside className="flex flex-col gap-6">
             {movers.length > 0 && (
               <section>

@@ -235,3 +235,29 @@ input[type="number"] {
     animation: none;
   }
 }
+
+/* Recent-trades ticker: scrolls up by itself, pauses when hovered or focused. */
+@keyframes ticker-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+.ticker-track {
+  animation: ticker-up var(--ticker-seconds, 12s) linear infinite;
+}
+.ticker-window:hover .ticker-track,
+.ticker-window:focus-within .ticker-track {
+  animation-play-state: paused;
+}
+.ticker-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+}
