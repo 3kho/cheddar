@@ -5,6 +5,11 @@ import { after } from "next/server";
 import {
   ExchangeError,
   addMouseFunder,
+  addOutcome,
+  requestOutcome,
+  reviewOutcomeRequest,
+  updateProposal,
+  updateWheel,
   approveProposal,
   approveSettlement,
   convertNo,
@@ -18,6 +23,7 @@ import {
   removeMouseFunder,
   resumeWheel,
   setCheesemonger,
+  setSuperAdmin,
   submitProposal,
   suspendUser,
   syncUser,
@@ -109,7 +115,7 @@ export async function placeOrderAction(input: TradeInput): Promise<ActionResult>
     let partial = false;
     if (input.side === "BUY") {
       const budget = parseLatta(input.amount ?? "");
-      if (!budget) return fail("Enter an amount of Latta to spend.");
+      if (!budget) return fail("Enter an amount of Latta Cheese to spend.");
       const q = quoteBuy(levels, budget);
       qty = q.shares;
       limit = q.worstPrice;
@@ -175,7 +181,8 @@ export async function syncNowAction(): Promise<ActionResult> {
 
 // ---------- proposals ----------
 
-export async function submitProposalAction(input: {
+/** What the propose / edit form sends. */
+export interface ProposalFormInput {
   title: string;
   description: string;
   category: string;
@@ -184,23 +191,116 @@ export async function submitProposalAction(input: {
   outcomes: string[];
   /** "svg:<name>" or a small data:image URL; empty for the category's icon. */
   icon: string;
-}): Promise<ActionResult> {
+  /** ISO time trading stops, or null to stay open until someone asks to close it. */
+  closesAt: string | null;
+  /** Multi-outcome only: people can suggest new outcomes later. */
+  allowAdditions: boolean;
+}
+
+function proposalFields(input: ProposalFormInput) {
+  const outcomes = (Array.isArray(input.outcomes) ? input.outcomes : []).map((s) => String(s).trim()).filter(Boolean);
+  if (outcomes.length === 1) throw new ExchangeError("INVALID", "A multi-outcome wheel needs at least two outcomes.");
+  return {
+    title: input.title,
+    description: input.description,
+    category: input.category,
+    resolutionCriteria: input.resolutionCriteria,
+    icon: input.icon,
+    outcomes: outcomes.length ? outcomes : ["Yes"],
+    closesAt: parseClose(input.closesAt),
+    allowAdditions: outcomes.length > 1 && !!input.allowAdditions,
+  };
+}
+
+function parseClose(v: string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) throw new ExchangeError("INVALID", "That close date isn't valid.");
+  return d;
+}
+
+export async function submitProposalAction(input: ProposalFormInput): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
-    const outcomes = (Array.isArray(input.outcomes) ? input.outcomes : []).map((s) => String(s).trim()).filter(Boolean);
-    if (outcomes.length === 1) return fail("A multi-outcome wheel needs at least two outcomes.");
-    await submitProposal(await getDb(), {
-      proposerId: u.id,
-      title: input.title,
-      description: input.description,
-      category: input.category,
-      resolutionCriteria: input.resolutionCriteria,
-      icon: input.icon,
-      outcomes: outcomes.length ? outcomes : ["Yes"],
-    });
+    await submitProposal(await getDb(), { proposerId: u.id, ...proposalFields(input) });
     revalidatePath("/propose");
     revalidatePath("/cheesemongers");
     return { ok: true, message: "Sent to the Cheesemongers for review." };
+  });
+}
+
+/** Cheesemongers: rewrite a pending proposal before approving it. */
+export async function updateProposalAction(proposalId: string, input: ProposalFormInput): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await updateProposal(await getDb(), { proposalId, editorId: u.id, fields: proposalFields(input) });
+    revalidatePath("/cheesemongers");
+    revalidatePath("/propose");
+    return { ok: true, message: "Proposal updated." };
+  });
+}
+
+/** Cheesemongers: edit a live wheel. Existing outcomes can be renamed; new ones are added. */
+export async function updateWheelAction(
+  wheelId: string,
+  input: ProposalFormInput & { labels: Record<string, string>; newOutcomes: string[] },
+): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    const db = await getDb();
+    await updateWheel(db, {
+      wheelId,
+      editorId: u.id,
+      fields: {
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        resolutionCriteria: input.resolutionCriteria,
+        icon: input.icon,
+        closesAt: parseClose(input.closesAt),
+        allowAdditions: !!input.allowAdditions,
+        labels: input.labels ?? {},
+      },
+    });
+    const added: string[] = [];
+    for (const label of (input.newOutcomes ?? []).map((x) => String(x).trim()).filter(Boolean)) {
+      await addOutcome(db, { wheelId, actorId: u.id, label });
+      added.push(label);
+    }
+    after(() => requote(wheelId));
+    revalidatePath("/", "layout");
+    return { ok: true, message: added.length ? `Saved, and added ${added.join(", ")}.` : "Saved." };
+  });
+}
+
+// ---------- new outcomes ----------
+
+export async function requestOutcomeAction(wheelId: string, label: string, note: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    const r = await requestOutcome(await getDb(), { wheelId, userId: u.id, label, note });
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Suggested “${r.label}”. A Cheesemonger will look at it.` };
+  });
+}
+
+export async function reviewOutcomeAction(
+  requestId: string,
+  approve: boolean,
+  note: string,
+  extra: ReviewExtra = {},
+): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    const chance = extra.startChance != null && Number.isFinite(extra.startChance) ? extra.startChance / 100 : undefined;
+    const r = await reviewOutcomeRequest(
+      await getDb(),
+      { requestId, reviewerId: u.id, approve, note, label: extra.label, startChance: chance },
+      reviewOpts(),
+    );
+    if (r.approved) after(() => requote(r.wheel.id));
+    revalidatePath("/", "layout");
+    return { ok: true, message: r.approved ? `Added “${r.wedge.label}” to ${r.wheel.title}.` : "Suggestion rejected." };
   });
 }
 
@@ -241,6 +341,9 @@ export interface ReviewExtra {
   proof?: string;
   /** Proposals: The Mouse's liquidity on the new wheel. */
   liquidity?: number;
+  /** New outcomes: the label to add (if tidied up), and its starting chance in percent. */
+  label?: string;
+  startChance?: number;
 }
 
 // ---------- The Mouse ----------
@@ -376,7 +479,7 @@ export async function removeFunderAction(slackId: string): Promise<ActionResult>
   return attempt(async () => {
     const u = await signedIn();
     await removeMouseFunder(await getDb(), { slackId, removedById: u.id });
-    revalidatePath("/cheesemongers");
+    revalidatePath("/admin");
     return { ok: true, message: "Removed. Their future Churn goes to them." };
   });
 }
@@ -407,6 +510,15 @@ export async function setCheesemongerAction(userId: string, value: boolean): Pro
     await setCheesemonger(await getDb(), { userId, actorId: u.id, value });
     revalidatePath("/", "layout");
     return { ok: true, message: value ? "Now a Cheesemonger." : "No longer a Cheesemonger." };
+  });
+}
+
+export async function setSuperAdminAction(userId: string, value: boolean): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await setSuperAdmin(await getDb(), { userId, actorId: u.id, value });
+    revalidatePath("/", "layout");
+    return { ok: true, message: value ? "Now a super admin (and a Cheesemonger)." : "No longer a super admin." };
   });
 }
 

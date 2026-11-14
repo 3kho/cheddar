@@ -9,9 +9,9 @@ export const metadata = { title: "Activity · Cheddar" };
 
 const MIN_FILTERS = [
   { key: "0", label: "Any amount", ticks: 0 },
-  { key: "10", label: "ʟ10+", ticks: 1_000 },
-  { key: "100", label: "ʟ100+", ticks: 10_000 },
-  { key: "1000", label: "ʟ1,000+", ticks: 100_000 },
+  { key: "10", label: "10+ Lc", ticks: 1_000 },
+  { key: "100", label: "100+ Lc", ticks: 10_000 },
+  { key: "1000", label: "1,000+ Lc", ticks: 100_000 },
 ] as const;
 
 export default async function ActivityPage({ searchParams }: { searchParams: Promise<{ min?: string }> }) {

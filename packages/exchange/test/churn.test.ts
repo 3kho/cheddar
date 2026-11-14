@@ -141,7 +141,7 @@ describe("Churn", () => {
 
 describe("Mouse funders", () => {
   it("a funder who never signed up feeds The Mouse automatically, by Slack id", async () => {
-    const monger = await makeUser(db, "monger", { isCheesemonger: true });
+    const monger = await makeUser(db, "monger", { isCheesemonger: true, isSuperAdmin: true });
     const added = await addMouseFunder(db, { slackId: "U0STAFF01", addedById: monger.id });
     expect(added).toMatchObject({ created: true, swept: null });
     ht.set("U0STAFF01", 40); // looked up on Hackatime by Slack id, no linking
@@ -158,7 +158,7 @@ describe("Mouse funders", () => {
   });
 
   it("a placeholder claimed on login keeps its Churn history (no double pay)", async () => {
-    const monger = await makeUser(db, "monger", { isCheesemonger: true });
+    const monger = await makeUser(db, "monger", { isCheesemonger: true, isSuperAdmin: true });
     const { userId } = await addMouseFunder(db, { slackId: "U0STAFF09", addedById: monger.id });
     ht.set("U0STAFF09", 10);
     await syncAll(db, ht);
@@ -170,7 +170,7 @@ describe("Mouse funders", () => {
   });
 
   it("unlinked users who aren't funders are not synced, and private funder stats are reported", async () => {
-    const monger = await makeUser(db, "monger", { isCheesemonger: true });
+    const monger = await makeUser(db, "monger", { isCheesemonger: true, isSuperAdmin: true });
     await makeUser(db, "nolink", { slackId: "U0NOLINK1" });
     const { userId } = await addMouseFunder(db, { slackId: "U0PRIVATE", addedById: monger.id });
     ht.data.set("U0PRIVATE", new HackatimeError("Hackatime 403: user has disabled public stats", 403));
@@ -179,7 +179,7 @@ describe("Mouse funders", () => {
   });
 
   it("adding an existing user sweeps their Latta, shares and open orders to The Mouse", async () => {
-    const monger = await makeUser(db, "monger", { isCheesemonger: true });
+    const monger = await makeUser(db, "monger", { isCheesemonger: true, isSuperAdmin: true });
     const staff = await coder("staff", "302", "U0STAFF02");
     const other = await makeUser(db, "other");
     await fund(db, staff.id, 5_000);
@@ -209,7 +209,7 @@ describe("Mouse funders", () => {
   });
 
   it("only Cheesemongers manage funders; removing one stops future routing", async () => {
-    const monger = await makeUser(db, "monger", { isCheesemonger: true });
+    const monger = await makeUser(db, "monger", { isCheesemonger: true, isSuperAdmin: true });
     const rando = await makeUser(db, "rando");
     await expect(addMouseFunder(db, { slackId: "U0STAFF03", addedById: rando.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(addMouseFunder(db, { slackId: "not-a-slack-id", addedById: monger.id })).rejects.toMatchObject({ code: "INVALID" });

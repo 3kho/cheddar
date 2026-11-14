@@ -4,7 +4,7 @@ import { balancesOf, listCategories, portfolioValue } from "@/lib/queries";
 import { formatLatta } from "@/lib/format";
 import type { SessionUser } from "@/lib/session";
 import { CategoryBar } from "./CategoryBar";
-import { ActivityIcon, CheeseIcon, PlusIcon, SearchIcon, TrophyIcon } from "./Icons";
+import { ActivityIcon, CheeseIcon, LattaCoin, PlusIcon, SearchIcon, TrophyIcon } from "./Icons";
 import { Avatar, Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -40,6 +40,11 @@ export async function Nav({ user }: { user: SessionUser | null }) {
           <Link href="/leaderboard" className="hidden items-center gap-1.5 rounded-[10px] px-2.5 py-2 font-semibold text-muted hover:bg-hover hover:text-ink xl:flex">
             <TrophyIcon size={16} /> Leaderboard
           </Link>
+          {user?.isSuperAdmin && (
+            <Link href="/admin" className="hidden rounded-[10px] px-2.5 py-2 font-semibold text-muted hover:bg-hover hover:text-ink xl:block">
+              Super admin
+            </Link>
+          )}
           {user?.isCheesemonger && (
             <Link href="/cheesemongers" className="hidden rounded-[10px] px-2.5 py-2 font-semibold text-muted hover:bg-hover hover:text-ink xl:block">
               <span className="flex items-center gap-1.5">
@@ -76,6 +81,7 @@ export async function Nav({ user }: { user: SessionUser | null }) {
                   <MenuLink href="/activity">Activity</MenuLink>
                   <MenuLink href="/leaderboard">Leaderboard</MenuLink>
                   {user.isCheesemonger && <MenuLink href="/cheesemongers">Cheesemongers</MenuLink>}
+                  {user.isSuperAdmin && <MenuLink href="/admin">Super admin</MenuLink>}
                   <form action="/api/auth/logout" method="post" className="mt-1 border-t border-line pt-1">
                     <button className="w-full px-3.5 py-2 text-left text-sm text-muted hover:bg-hover hover:text-ink">Log out</button>
                   </form>
@@ -106,7 +112,10 @@ function NavStat({ label, value }: { label: string; value: string }) {
   return (
     <span className="flex flex-col items-start leading-tight">
       <span className="text-xs text-muted">{label}</span>
-      <span className="tabular text-sm font-semibold text-yes">{value}</span>
+      <span className="tabular flex items-center gap-1 text-sm font-semibold text-yes">
+        <LattaCoin size={14} />
+        {value}
+      </span>
     </span>
   );
 }

@@ -1,4 +1,10 @@
-/** Display helpers shared by server and client. Money is always integer ticks (100 = 1 Latta). */
+/**
+ * Display helpers shared by server and client. Money is always integer ticks (100 = 1 Latta Cheese).
+ * The currency is Latta Cheese, written "Lc" after the amount: 12.50 Lc.
+ */
+
+export const CURRENCY = "Lc";
+export const CURRENCY_NAME = "Latta Cheese";
 
 export const TICKS_PER_LATTA = 100;
 
@@ -13,7 +19,7 @@ export function formatLatta(ticks: number, opts: { compact?: boolean; sign?: boo
   else if (opts.compact && cents === 0) body = whole.toLocaleString("en-US");
   else body = `${whole.toLocaleString("en-US")}.${String(cents).padStart(2, "0")}`;
   const prefix = neg ? "-" : opts.sign && ticks > 0 ? "+" : "";
-  return `${prefix}ʟ${body}`;
+  return `${prefix}${body} ${CURRENCY}`;
 }
 
 function trim(n: number): string {

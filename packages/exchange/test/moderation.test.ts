@@ -13,6 +13,7 @@ import {
   rejectProposal,
   resumeWheel,
   setCheesemonger,
+  setSuperAdmin,
   submitProposal,
   suspendUser,
   unsuspendUser,
@@ -48,7 +49,7 @@ async function logs() {
 }
 
 async function world() {
-  const monger = await makeUser(db, "monger", { isCheesemonger: true });
+  const monger = await makeUser(db, "monger", { isCheesemonger: true, isSuperAdmin: true });
   const monger2 = await makeUser(db, "monger2", { isCheesemonger: true });
   const alice = await makeUser(db, "alice", { slackId: "U0ALICE01" });
   const bob = await makeUser(db, "bob");
@@ -101,16 +102,30 @@ describe("Suspension", () => {
 });
 
 describe("Cheesemonger roles", () => {
-  it("promotes and demotes, never yourself, and logs it", async () => {
-    const { monger, alice, bob } = await world();
+  it("only super admins promote and demote, never themselves, and it's logged", async () => {
+    const { monger, monger2, alice, bob } = await world();
     await setCheesemonger(db, { userId: alice.id, actorId: monger.id, value: true });
     await setCheesemonger(db, { userId: alice.id, actorId: monger.id, value: true }); // no-op, not logged twice
     const [a] = await db.select().from(users).where(eq(users.id, alice.id));
     expect(a!.isCheesemonger).toBe(true);
     expect(await code(setCheesemonger(db, { userId: monger.id, actorId: monger.id, value: false }))).toBe("INVALID");
-    await setCheesemonger(db, { userId: monger.id, actorId: alice.id, value: false });
-    expect(await code(setCheesemonger(db, { userId: bob.id, actorId: monger.id, value: true }))).toBe("FORBIDDEN");
+    // A plain Cheesemonger can't manage roles or users.
+    expect(await code(setCheesemonger(db, { userId: bob.id, actorId: monger2.id, value: true }))).toBe("FORBIDDEN");
+    expect(await code(suspendUser(db, { userId: bob.id, actorId: monger2.id, reason: "x" }))).toBe("FORBIDDEN");
+    await setCheesemonger(db, { userId: alice.id, actorId: monger.id, value: false });
     expect((await logs()).map((l) => l.action)).toEqual(["user.promote", "user.demote"]);
+  });
+
+  it("super admins make super admins, who are always Cheesemongers too", async () => {
+    const { monger, monger2, bob } = await world();
+    expect(await code(setSuperAdmin(db, { userId: bob.id, actorId: monger2.id, value: true }))).toBe("FORBIDDEN");
+    await setSuperAdmin(db, { userId: bob.id, actorId: monger.id, value: true });
+    const [b] = await db.select().from(users).where(eq(users.id, bob.id));
+    expect(b).toMatchObject({ isSuperAdmin: true, isCheesemonger: true });
+    expect(await code(setCheesemonger(db, { userId: bob.id, actorId: monger.id, value: false }))).toBe("INVALID");
+    expect(await code(setSuperAdmin(db, { userId: monger.id, actorId: monger.id, value: false }))).toBe("INVALID");
+    await setSuperAdmin(db, { userId: monger.id, actorId: bob.id, value: false });
+    expect(await code(suspendUser(db, { userId: bob.id, actorId: monger.id, reason: "x" }))).toBe("FORBIDDEN");
   });
 });
 

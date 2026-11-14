@@ -100,6 +100,8 @@ export const users = pgTable(
     email: text("email"),
     verificationStatus: text("verification_status"),
     isCheesemonger: boolean("is_cheesemonger").notNull().default(false),
+    /** Super admins run users, Mouse funders, logs and health. They're always Cheesemongers too. */
+    isSuperAdmin: boolean("is_super_admin").notNull().default(false),
     isBot: boolean("is_bot").notNull().default(false),
     /** Identifies singleton bots, e.g. "mouse". */
     botRole: text("bot_role").unique(),
@@ -183,6 +185,8 @@ export const proposals = pgTable(
     icon: text("icon"),
     /** Wedge labels. One label = a binary Yes/No wheel. */
     outcomes: jsonb("outcomes").$type<string[]>().notNull(),
+    /** Multi-outcome only: people may suggest new outcomes after launch, for a Cheesemonger to add. */
+    allowAdditions: boolean("allow_additions").notNull().default(false),
     status: reviewStatusEnum("status").notNull().default("pending"),
     reviewerId: uuid("reviewer_id").references(() => users.id),
     reviewNote: text("review_note"),
@@ -227,6 +231,8 @@ export const wheels = pgTable(
     liquidity: integer("liquidity").notNull().default(0),
     /** LMSR anchor per outcome (wedge id, or "YES"/"NO" for binary wheels); see exchange/mouse.ts. */
     mmAnchor: jsonb("mm_anchor").$type<Record<string, number>>(),
+    /** Multi-outcome only: people may suggest new outcomes, which a Cheesemonger can add. */
+    allowAdditions: boolean("allow_additions").notNull().default(false),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [
@@ -254,6 +260,34 @@ export const wedges = pgTable(
   (t) => [
     unique("wedges_wheel_label_uq").on(t.wheelId, t.label),
     check("wedges_last_price_range", sql`${t.lastYesPrice} IS NULL OR ${t.lastYesPrice} BETWEEN 1 AND 99`),
+  ],
+);
+
+/** Someone asking for a new outcome on a live multi-outcome wheel (see wheels.allowAdditions). */
+export const outcomeRequests = pgTable(
+  "outcome_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    wheelId: uuid("wheel_id")
+      .notNull()
+      .references(() => wheels.id),
+    proposerId: uuid("proposer_id")
+      .notNull()
+      .references(() => users.id),
+    label: text("label").notNull(),
+    /** Why it should be added (for Cheesemongers). */
+    note: text("note").notNull().default(""),
+    status: reviewStatusEnum("status").notNull().default("pending"),
+    reviewerId: uuid("reviewer_id").references(() => users.id),
+    reviewNote: text("review_note"),
+    reviewedAt: ts("reviewed_at"),
+    /** The wedge it became, once approved. */
+    wedgeId: uuid("wedge_id").references(() => wedges.id),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("outcome_requests_status_idx").on(t.status, t.createdAt),
+    index("outcome_requests_wheel_idx").on(t.wheelId),
   ],
 );
 

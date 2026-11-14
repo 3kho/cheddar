@@ -63,9 +63,10 @@ export function ReviewButtons({
   noteLabel = "Note (optional, shown to the author)",
   proof,
   liquidity,
+  outcome,
 }: {
   action: (approve: boolean, note: string, extra: ReviewExtra) => Promise<ActionResult>;
-  /** What approving does, e.g. "Zach wins. Pays ʟ412.00 to 9 holders." */
+  /** What approving does, e.g. "Zach wins. Pays 412.00 Lc to 9 holders." */
   approveConsequence: string;
   rejectConsequence: string;
   noteLabel?: string;
@@ -73,11 +74,15 @@ export function ReviewButtons({
   proof?: { label: string; placeholder: string; hint: string };
   /** Ask for The Mouse's liquidity on approval, starting at this value. */
   liquidity?: number;
+  /** New-outcome suggestions: let the reviewer tidy the label and pick its starting chance (%). */
+  outcome?: { label: string; startChance: number };
 }) {
   const router = useRouter();
   const [note, setNote] = useState("");
   const [proofText, setProofText] = useState("");
   const [depth, setDepth] = useState(String(liquidity ?? 0));
+  const [label, setLabel] = useState(outcome?.label ?? "");
+  const [chance, setChance] = useState(String(outcome?.startChance ?? ""));
   const [confirming, setConfirming] = useState<"approve" | "reject" | null>(null);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<ActionResult | null>(null);
@@ -87,6 +92,8 @@ export function ReviewButtons({
       const r = await safely(action(approve, note, {
         proof: proof ? proofText : undefined,
         liquidity: liquidity != null ? Math.max(0, Math.trunc(Number(depth) || 0)) : undefined,
+        label: outcome ? label : undefined,
+        startChance: outcome && chance.trim() ? Number(chance) : undefined,
       }));
       setMsg(r);
       setConfirming(null);
@@ -107,6 +114,25 @@ export function ReviewButtons({
           <textarea value={proofText} onChange={(e) => setProofText(e.target.value)} rows={3} placeholder={proof.placeholder} className={`${field} py-2`} />
           <span className="mt-1 block text-xs text-muted">{proof.hint}</span>
         </label>
+      )}
+      {outcome && (
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted">Outcome to add (tidy it up if needed)</span>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} className={`${field} h-9`} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted">Starting chance (%)</span>
+            <input
+              type="number"
+              min={1}
+              max={90}
+              value={chance}
+              onChange={(e) => setChance(e.target.value)}
+              className={`${field} h-9 text-right font-semibold tabular`}
+            />
+          </label>
+        </div>
       )}
       {liquidity != null && (
         <label className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2">

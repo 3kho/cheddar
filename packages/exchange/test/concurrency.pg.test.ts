@@ -131,7 +131,7 @@ describe("concurrency on real Postgres", () => {
 
   it("settling a wheel mid-storm pays out exactly and blocks later trades", async () => {
     const creator = await makeUser(db, "creator3");
-    const monger = await makeUser(db, "monger3", { isCheesemonger: true });
+    const monger = await makeUser(db, "monger3", { isCheesemonger: true, isSuperAdmin: true });
     const traders: { id: string }[] = [];
     for (let i = 0; i < 8; i++) {
       const u = await makeUser(db, `settler${i}`);
@@ -205,7 +205,7 @@ describe("concurrency on real Postgres", () => {
   }, 120_000);
 
   it("a Mouse-funder sweep racing the user's own orders leaves nothing behind", async () => {
-    const monger = await makeUser(db, "monger4", { isCheesemonger: true });
+    const monger = await makeUser(db, "monger4", { isCheesemonger: true, isSuperAdmin: true });
     const staff = await makeUser(db, "staff4", { slackId: "U0RACE001" });
     const other = await makeUser(db, "other4");
     await fund(db, staff.id, 20_000);
@@ -243,7 +243,7 @@ describe("concurrency on real Postgres", () => {
   }, 300_000);
 
   it("a suspension racing the user's own orders leaves them with no open orders or escrow", async () => {
-    const monger = await makeUser(db, "monger5", { isCheesemonger: true });
+    const monger = await makeUser(db, "monger5", { isCheesemonger: true, isSuperAdmin: true });
     const bad = await makeUser(db, "bad5");
     await fund(db, bad.id, 20_000);
     const { wedges } = await makeWheel(db, monger.id, ["S", "T", "U"]);

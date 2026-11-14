@@ -10,6 +10,7 @@ import {
   sql,
   accounts,
   auditLog,
+  outcomeRequests,
   churnSyncs,
   journalEntries,
   ledgerLines,
@@ -60,6 +61,8 @@ export interface WheelView {
   resolvedAt: Date | null;
   /** The Mouse's LMSR depth (0 = not quoting). */
   liquidity: number;
+  /** Multi-outcome wheels where people can suggest new outcomes. */
+  allowAdditions: boolean;
   volumeTicks: number;
   volume24hTicks: number;
   wedges: WedgeView[];
@@ -348,11 +351,46 @@ export async function dashboardCounts() {
     SELECT
       (SELECT COUNT(*) FROM proposals WHERE status = 'pending')::int AS proposals,
       (SELECT COUNT(*) FROM settlements WHERE status = 'pending')::int AS settlements,
+      (SELECT COUNT(*) FROM outcome_requests WHERE status = 'pending')::int AS outcomes,
       (SELECT COUNT(*) FROM mouse_funders WHERE active)::int AS funders,
       (SELECT COUNT(*) FROM users WHERE suspended_at IS NOT NULL)::int AS suspended,
       (SELECT COUNT(*) FROM wheels WHERE trading_paused_at IS NOT NULL AND status NOT IN ('resolved', 'moldy'))::int AS paused
-  `)) as unknown as { rows: { proposals: number; settlements: number; funders: number; suspended: number; paused: number }[] };
+  `)) as unknown as { rows: { proposals: number; settlements: number; outcomes: number; funders: number; suspended: number; paused: number }[] };
   return r.rows[0]!;
+}
+
+/** A pending proposal, for the Cheesemonger edit page. */
+export async function proposalById(id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const db = await getDb();
+  const [p] = await db.select().from(proposals).where(eq(proposals.id, id));
+  return p ?? null;
+}
+
+/** Suggested outcomes waiting for a Cheesemonger, oldest first, with the wheel's current outcomes. */
+export async function pendingOutcomeRequests() {
+  const db = await getDb();
+  const rows = await db
+    .select({ r: outcomeRequests, wheel: wheels, proposer: users.name, proposerSlack: users.slackId })
+    .from(outcomeRequests)
+    .innerJoin(wheels, eq(wheels.id, outcomeRequests.wheelId))
+    .innerJoin(users, eq(users.id, outcomeRequests.proposerId))
+    .where(eq(outcomeRequests.status, "pending"))
+    .orderBy(asc(outcomeRequests.createdAt))
+    .limit(100);
+  const views = await wedgeViews([...new Set(rows.map((x) => x.wheel.id))]);
+  return rows.map((x) => ({ ...x, outcomes: views.get(x.wheel.id) ?? [] }));
+}
+
+/** Pending suggestions on one wheel (shown on its page). */
+export async function wheelOutcomeRequests(wheelId: string) {
+  const db = await getDb();
+  return db
+    .select({ id: outcomeRequests.id, label: outcomeRequests.label, proposerId: outcomeRequests.proposerId, createdAt: outcomeRequests.createdAt })
+    .from(outcomeRequests)
+    .where(and(eq(outcomeRequests.wheelId, wheelId), eq(outcomeRequests.status, "pending")))
+    .orderBy(asc(outcomeRequests.createdAt))
+    .limit(50);
 }
 
 /** Oldest first, so nothing waits forever. */

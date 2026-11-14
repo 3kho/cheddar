@@ -131,7 +131,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
                   {p.lastSync ? ` · synced ${timeAgo(p.lastSync.fetchedAt)}` : ""}
                 </>
               ) : (
-                ": link Hackatime to earn Latta from coding"
+                ": link Hackatime to earn Latta Cheese from coding"
               )}
             </span>
             {!user.isMouseFunder &&

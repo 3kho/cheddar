@@ -11,6 +11,9 @@ export {
   MAX_WEDGES,
   MAX_ICON_CHARS,
   cleanIcon,
+  cleanCloseTime,
+  updateProposal,
+  type ProposalFields,
   type ProposalInput,
 } from "./proposals";
 export {
@@ -45,8 +48,9 @@ export {
   type TrustLevel,
 } from "./hackatime";
 export { logEvent, type AuditAction, type AuditEvent } from "./log";
-export { pauseWheel, resumeWheel, setCheesemonger, suspendUser, unsuspendUser } from "./moderation";
+export { pauseWheel, resumeWheel, setCheesemonger, setSuperAdmin, suspendUser, unsuspendUser } from "./moderation";
 export { MAX_LIQUIDITY, MOUSE_LEVELS, mousePrices, mouseWheelIds, requoteWheel, setWheelLiquidity } from "./mouse";
 export { convertNo, mergePairs, mergeYesSet, type ConversionResult } from "./link";
 export { houseOutstanding } from "./house";
+export { addOutcome, requestOutcome, reviewOutcomeRequest, updateWheel, type WheelEdit } from "./outcomes";
 export * as lmsr from "./lmsr";

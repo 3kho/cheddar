@@ -45,6 +45,16 @@ async function lockTradableWheel(tx: Tx, wheelId: string) {
   return { wheel: w, wedges: ws };
 }
 
+/**
+ * Full-set conversions assume the list of outcomes is final. On a wheel that can still gain
+ * outcomes, a "Yes on every outcome" set could lose if a new one is added and wins.
+ */
+function assertFixedOutcomes(wheel: { allowAdditions: boolean }) {
+  if (wheel.allowAdditions) {
+    throw new ExchangeError("INVALID", "new outcomes can still be added to this wheel, so whole-wheel conversions are off");
+  }
+}
+
 async function freeShares(tx: Tx, userId: string, wedgeId: string) {
   const [p] = await tx
     .select()
@@ -80,7 +90,8 @@ export async function mergeYesSet(db: AnyDb, input: { userId: string; wheelId: s
   const k = whole(input.shares);
   const mouse = await ensureMouse(db);
   return runTx(db, async (tx) => {
-    const { wedges: ws } = await lockTradableWheel(tx, input.wheelId);
+    const { wheel, wedges: ws } = await lockTradableWheel(tx, input.wheelId);
+    assertFixedOutcomes(wheel);
     if (ws.length < 2) throw new ExchangeError("INVALID", "only multi-outcome wheels have full sets");
     await assertCanTrade(tx, input.userId);
     if (input.userId === mouse.id) throw new ExchangeError("INVALID", "The Mouse can't convert with itself");
@@ -117,7 +128,8 @@ export async function convertNo(
   if (!chosen.length) throw new ExchangeError("INVALID", "pick at least one outcome");
   const mouse = await ensureMouse(db);
   return runTx(db, async (tx) => {
-    const { wedges: ws } = await lockTradableWheel(tx, input.wheelId);
+    const { wheel, wedges: ws } = await lockTradableWheel(tx, input.wheelId);
+    assertFixedOutcomes(wheel);
     if (ws.length < 2) throw new ExchangeError("INVALID", "only multi-outcome wheels can convert No shares");
     if (chosen.some((id) => !ws.some((w) => w.id === id))) throw new ExchangeError("INVALID", "those outcomes aren't on this wheel");
     await assertCanTrade(tx, input.userId);

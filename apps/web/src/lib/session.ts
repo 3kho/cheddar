@@ -15,6 +15,8 @@ export interface SessionUser {
   name: string | null;
   slackId: string | null;
   isCheesemonger: boolean;
+  /** Runs users, Mouse funders, logs and health (/admin). Always a Cheesemonger too. */
+  isSuperAdmin: boolean;
   hackatimeUserId: string | null;
   /** HC staff/adults whose Churn feeds The Mouse. They can look but not trade. */
   isMouseFunder: boolean;
@@ -58,6 +60,7 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
       name: users.name,
       slackId: users.slackId,
       isCheesemonger: users.isCheesemonger,
+      isSuperAdmin: users.isSuperAdmin,
       hackatimeUserId: users.hackatimeUserId,
       suspendedAt: users.suspendedAt,
       suspendReason: users.suspendReason,
@@ -81,5 +84,11 @@ export async function requireUser(returnTo = "/"): Promise<SessionUser> {
 export async function requireCheesemonger(): Promise<SessionUser> {
   const u = await requireUser("/cheesemongers");
   if (!u.isCheesemonger) redirect("/");
+  return u;
+}
+
+export async function requireSuperAdmin(): Promise<SessionUser> {
+  const u = await requireUser("/admin");
+  if (!u.isSuperAdmin) redirect("/");
   return u;
 }

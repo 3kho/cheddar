@@ -18,6 +18,34 @@ export interface ProposalInput {
   icon?: string | null;
   /** Wedge labels. One label makes a binary Yes/No wheel. */
   outcomes: string[];
+  /** Multi-outcome only: let people suggest new outcomes after launch. */
+  allowAdditions?: boolean;
+}
+
+/** Everything about a proposal except who sent it. */
+export type ProposalFields = Omit<ProposalInput, "proposerId">;
+
+function cleanFields(input: ProposalFields, now: Date) {
+  const outcomes = cleanOutcomes(input.outcomes);
+  return {
+    title: requireText(input.title, "title", 200),
+    description: (input.description ?? "").trim().slice(0, 10_000),
+    category: input.category?.trim().slice(0, 40) || null,
+    resolutionCriteria: requireText(input.resolutionCriteria, "resolution criteria", 5_000),
+    closesAt: cleanCloseTime(input.closesAt, now),
+    icon: cleanIcon(input.icon),
+    outcomes,
+    allowAdditions: outcomes.length > 1 && !!input.allowAdditions,
+  };
+}
+
+/** Null for "open until closed by request"; otherwise a valid future time. */
+export function cleanCloseTime(closesAt: Date | null | undefined, now: Date): Date | null {
+  if (closesAt == null) return null;
+  if (!(closesAt instanceof Date) || Number.isNaN(closesAt.getTime())) throw new ExchangeError("INVALID", "that close time isn't a valid date");
+  if (closesAt <= now) throw new ExchangeError("INVALID", "close time must be in the future");
+  if (closesAt.getTime() - now.getTime() > 5 * 365 * 86_400_000) throw new ExchangeError("INVALID", "close time must be within 5 years");
+  return closesAt;
 }
 
 /** Uploaded icons are resized in the browser; anything bigger than this was not. */
@@ -40,32 +68,55 @@ export const MAX_WEDGES = 30;
 /** Anyone signed in can ask for a market; a Cheesemonger approves it into a Wheel. */
 export async function submitProposal(db: AnyDb, input: ProposalInput, opts: ReviewOptions = {}) {
   const now = (opts.now ?? (() => new Date()))();
-  const title = requireText(input.title, "title", 200);
-  const resolutionCriteria = requireText(input.resolutionCriteria, "resolution criteria", 5_000);
-  const outcomes = cleanOutcomes(input.outcomes);
-  const icon = cleanIcon(input.icon);
-  if (input.closesAt != null && (!(input.closesAt instanceof Date) || Number.isNaN(input.closesAt.getTime()) || input.closesAt <= now)) {
-    throw new ExchangeError("INVALID", "close time must be in the future");
-  }
+  const fields = cleanFields(input, now);
   return runTx(db, async (tx) => {
     const [u] = await tx.select({ isBot: users.isBot, suspendedAt: users.suspendedAt }).from(users).where(eq(users.id, input.proposerId));
     if (!u || u.isBot) throw new ExchangeError("FORBIDDEN", "only people can propose markets");
     if (u.suspendedAt) throw new ExchangeError("FORBIDDEN", "your account is suspended by the Cheesemongers");
     const [p] = await tx
       .insert(proposals)
-      .values({
-        proposerId: input.proposerId,
-        title,
-        description: (input.description ?? "").trim(),
-        category: input.category?.trim() || null,
-        resolutionCriteria,
-        closesAt: input.closesAt ?? null,
-        icon,
-        outcomes,
-      })
+      .values({ proposerId: input.proposerId, ...fields })
       .returning();
-    await logEvent(tx, { actorId: input.proposerId, action: "proposal.submit", targetType: "proposal", targetId: p!.id, details: { title } });
+    await logEvent(tx, {
+      actorId: input.proposerId,
+      action: "proposal.submit",
+      targetType: "proposal",
+      targetId: p!.id,
+      details: { title: fields.title },
+    });
     return p!;
+  });
+}
+
+/**
+ * A Cheesemonger rewrites a pending proposal: any field, including the outcomes, the type
+ * (Yes/No or multiple choice), the close time and whether new outcomes can be suggested.
+ */
+export async function updateProposal(
+  db: AnyDb,
+  input: { proposalId: string; editorId: string; fields: ProposalFields },
+  opts: { now?: () => Date } = {},
+) {
+  const now = (opts.now ?? (() => new Date()))();
+  const fields = cleanFields(input.fields, now);
+  return runTx(db, async (tx) => {
+    const [ed] = await tx.select({ ok: users.isCheesemonger }).from(users).where(eq(users.id, input.editorId));
+    if (!ed?.ok) throw new ExchangeError("FORBIDDEN", "only Cheesemongers can edit proposals");
+    const [p] = await tx.select().from(proposals).where(eq(proposals.id, input.proposalId)).for("update");
+    if (!p) throw new ExchangeError("NOT_FOUND", "proposal not found");
+    if (p.status !== "pending") throw new ExchangeError("INVALID", `proposal is already ${p.status}`);
+    const [next] = await tx.update(proposals).set(fields).where(eq(proposals.id, p.id)).returning();
+    const changed = (Object.keys(fields) as (keyof typeof fields)[]).filter(
+      (k) => JSON.stringify(p[k] ?? null) !== JSON.stringify(fields[k] ?? null),
+    );
+    await logEvent(tx, {
+      actorId: input.editorId,
+      action: "proposal.edit",
+      targetType: "proposal",
+      targetId: p.id,
+      details: { title: fields.title, changed },
+    });
+    return next!;
   });
 }
 
@@ -102,6 +153,7 @@ export async function approveProposal(
         resolutionCriteria: p.resolutionCriteria,
         closesAt: p.closesAt,
         icon: p.icon,
+        allowAdditions: p.outcomes.length > 1 && p.allowAdditions,
         creatorId: p.proposerId,
         proposalId: p.id,
       })
@@ -168,7 +220,7 @@ export async function withdrawProposal(db: AnyDb, input: { proposalId: string; p
   });
 }
 
-function cleanOutcomes(raw: string[]): string[] {
+export function cleanOutcomes(raw: string[]): string[] {
   if (!Array.isArray(raw) || raw.length === 0) throw new ExchangeError("INVALID", "add at least one outcome");
   if (raw.length > MAX_WEDGES) throw new ExchangeError("INVALID", `at most ${MAX_WEDGES} outcomes`);
   const out = raw.map((o) => requireText(o, "outcome", 80));

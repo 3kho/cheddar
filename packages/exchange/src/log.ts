@@ -5,6 +5,12 @@ export type AuditAction =
   | "proposal.approve"
   | "proposal.reject"
   | "proposal.withdraw"
+  | "proposal.edit"
+  | "wheel.edit"
+  | "outcome.request"
+  | "outcome.approve"
+  | "outcome.reject"
+  | "outcome.add"
   | "settlement.propose"
   | "settlement.approve"
   | "settlement.reject"
@@ -14,6 +20,8 @@ export type AuditAction =
   | "user.unsuspend"
   | "user.promote"
   | "user.demote"
+  | "user.super_admin"
+  | "user.super_admin_remove"
   | "wheel.pause"
   | "wheel.resume"
   | "wheel.liquidity"
@@ -23,7 +31,7 @@ export interface AuditEvent {
   /** Null for system jobs. */
   actorId: string | null;
   action: AuditAction;
-  targetType?: "proposal" | "settlement" | "wheel" | "user" | "funder";
+  targetType?: "proposal" | "settlement" | "wheel" | "user" | "funder" | "outcome";
   targetId?: string;
   details?: Record<string, unknown>;
 }

@@ -38,7 +38,7 @@ export function FunderForm() {
         </button>
       </div>
       <p className="mt-1 text-xs text-muted">
-        Works whether or not they use Cheddar: their Hackatime hours are pulled in by Slack ID and feed The Mouse right away. If they already have an account, their open orders are cancelled and their Latta and shares move to The Mouse.
+        Works whether or not they use Cheddar: their Hackatime hours are pulled in by Slack ID and feed The Mouse right away. If they already have an account, their open orders are cancelled and their Latta Cheese and shares move to The Mouse.
       </p>
       {result && <Notice result={result} />}
     </div>

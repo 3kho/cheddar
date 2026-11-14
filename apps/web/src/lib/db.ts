@@ -36,6 +36,12 @@ async function open(): Promise<AnyDb> {
       .set({ isCheesemonger: true })
       .where(and(inArray(users.slackId, env.cheesemongerSlackIds), eq(users.isCheesemonger, false)));
   }
+  if (env.superAdminSlackIds.length) {
+    await db
+      .update(users)
+      .set({ isSuperAdmin: true, isCheesemonger: true })
+      .where(and(inArray(users.slackId, env.superAdminSlackIds), eq(users.isSuperAdmin, false)));
+  }
   return db;
 }
 

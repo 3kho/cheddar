@@ -19,7 +19,9 @@ export async function upsertHcaUser(claims: Record<string, unknown>): Promise<st
     slackId,
     verificationStatus: str(claims.verification_status),
   };
-  const promote = !!slackId && env.cheesemongerSlackIds.includes(slackId);
+  const superAdmin = !!slackId && env.superAdminSlackIds.includes(slackId);
+  const promote = superAdmin || (!!slackId && env.cheesemongerSlackIds.includes(slackId));
+  const roles = { ...(promote ? { isCheesemonger: true } : {}), ...(superAdmin ? { isSuperAdmin: true } : {}) };
   const db = await getDb();
 
   // First login of someone a Cheesemonger added as a Mouse funder before they signed up:
@@ -29,7 +31,7 @@ export async function upsertHcaUser(claims: Record<string, unknown>): Promise<st
     if (!known) {
       const [claimed] = await db
         .update(users)
-        .set({ hcaSub: sub, ...profile, ...(promote ? { isCheesemonger: true } : {}) })
+        .set({ hcaSub: sub, ...profile, ...roles })
         .where(and(eq(users.slackId, slackId), isNull(users.hcaSub), eq(users.isBot, false)))
         .returning({ id: users.id });
       if (claimed) return claimed.id;
@@ -38,10 +40,10 @@ export async function upsertHcaUser(claims: Record<string, unknown>): Promise<st
 
   const [row] = await db
     .insert(users)
-    .values({ hcaSub: sub, ...profile, isCheesemonger: promote })
+    .values({ hcaSub: sub, ...profile, isCheesemonger: promote, isSuperAdmin: superAdmin })
     .onConflictDoUpdate({
       target: users.hcaSub,
-      set: { ...profile, ...(promote ? { isCheesemonger: true } : {}) },
+      set: { ...profile, ...roles },
     })
     .returning({ id: users.id });
   return row!.id;

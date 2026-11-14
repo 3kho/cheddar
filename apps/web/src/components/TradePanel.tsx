@@ -19,7 +19,7 @@ import {
   type Holding,
 } from "@/lib/market";
 import { Notice } from "./ActionButton";
-import { AlertIcon, CoinsIcon } from "./Icons";
+import { AlertIcon, CoinsIcon, LattaCoin } from "./Icons";
 import { WheelIcon } from "./Logo";
 
 export interface TradeWedge {
@@ -291,14 +291,16 @@ export function TradePanel({
             <label className="flex items-center justify-between gap-3">
               <span className="shrink-0">
                 <span className="block text-base font-medium">Amount</span>
-                <span className="tabular block text-xs text-muted">Cash {formatLatta(availableTicks)}</span>
+                <span className="tabular flex items-center justify-end gap-1 text-xs text-muted">
+                  <LattaCoin size={12} /> Cash {formatLatta(availableTicks)}
+                </span>
               </span>
-              <input inputMode="decimal" placeholder="ʟ0" value={amount} onChange={(e) => setAmount(e.target.value.replace(/^ʟ/, ""))} className={bigInput} />
+              <input inputMode="decimal" placeholder="0 Lc" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\s*lc\s*/gi, ""))} className={bigInput} />
             </label>
             <div className="mt-2 flex justify-end gap-1">
               {QUICK_ADD.map((n) => (
                 <Chip key={n} onClick={() => setAmount(String(((parseLatta(amount) ?? 0) + n * 100) / 100))}>
-                  +ʟ{n}
+                  +{n} Lc
                 </Chip>
               ))}
               <Chip onClick={() => setAmount(String(availableTicks / 100))}>Max</Chip>
@@ -379,7 +381,7 @@ export function TradePanel({
             {side === "BUY" && heldOpposite > 0 && (
               <p className="rounded-lg bg-accent-soft p-2.5 text-xs leading-relaxed">
                 You already hold <strong>{formatShares(heldOpposite)} {outcomeName(opposite)}</strong> here. Buying {outcomeName(outcome)} too
-                makes pairs that always pay exactly ʟ1, so you mostly just pay the spread.{" "}
+                makes pairs that always pay exactly 1 Lc, so you mostly just pay the spread.{" "}
                 <button
                   type="button"
                   className="font-semibold underline underline-offset-2"
@@ -438,7 +440,7 @@ export function TradePanel({
           </div>
         )}
       </div>
-      <p className="mt-4 text-center text-[13px] text-faint">Each share pays ʟ1 if it&apos;s right and ʟ0 if it&apos;s wrong.</p>
+      <p className="mt-4 text-center text-[13px] text-faint">Each share pays 1 Lc if it&apos;s right and 0 Lc if it&apos;s wrong.</p>
     </div>
   );
 }

@@ -24,6 +24,8 @@ export const env = {
   cronSecret: process.env.CRON_SECRET ?? "",
   /** Slack ids that are made Cheesemongers when they log in. */
   cheesemongerSlackIds: list(process.env.CHEDDAR_CHEESEMONGER_SLACK_IDS),
+  /** Slack ids that are made super admins (and Cheesemongers) when they log in. */
+  superAdminSlackIds: list(process.env.CHEDDAR_SUPER_ADMIN_SLACK_IDS),
   /** Let a Cheesemonger review their own proposals/settlements (useful while there is only one). */
   allowSelfReview: process.env.CHEDDAR_ALLOW_SELF_REVIEW === "true",
 };

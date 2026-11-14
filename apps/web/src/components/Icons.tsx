@@ -72,6 +72,23 @@ export const ActivityIcon = (p: P) => (
     <path d="M3 12h4l3-8 4 16 3-8h4" />
   </Svg>
 );
+export const PencilIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" />
+    <path d="m13.5 6.5 4 4" />
+  </Svg>
+);
+export const CalendarIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
+    <path d="M3.5 10h17M8 3v4M16 3v4" />
+  </Svg>
+);
+export const ListPlusIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 6h11M4 12h11M4 18h7M18 15v6M15 18h6" />
+  </Svg>
+);
 export const PlusIcon = (p: P) => (
   <Svg {...p}>
     <path d="M12 5v14M5 12h14" />
@@ -311,5 +328,80 @@ export function Change({ value, className = "" }: { value: number | null | undef
       </svg>
       {Math.abs(value)}%<span className="sr-only">{up ? " up" : " down"} in 24 hours</span>
     </span>
+  );
+}
+
+// ---------- currency ----------
+
+/** The Latta Cheese (Lc) coin. */
+export function LattaCoin({ size = 16, className, title }: { size?: number; className?: string; title?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 825 825"
+      className={className}
+      role={title ? "img" : undefined}
+      aria-label={title}
+      aria-hidden={title ? undefined : true}
+      fillRule="evenodd"
+      clipRule="evenodd"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeMiterlimit={1.5}
+    >
+      <g transform="matrix(1,0,0,1,-145.83408,-175.554098)">
+              <g transform="matrix(1,0,0,1,-198.114544,-476.236885)">
+                  <circle cx="756.053" cy="1063.895" r="384.126" fill="rgb(225,157,23)" stroke="rgb(255,203,56)" strokeWidth="55.96px"/>
+              </g>
+              <g transform="matrix(1.333165,0,0,1.333165,-394.224183,-889.007933)">
+                  <path d="M565.469,1168.683L565.469,989.013L862.955,1063.895L862.955,1239.373L565.469,1168.683Z" fill="none" stroke="rgb(255,203,56)" strokeWidth="41.97px"/>
+              </g>
+              <g transform="matrix(1.333165,0,0,1.333165,-394.224183,-889.007933)">
+                  <path d="M689.176,922.741L862.955,1063.895" fill="none" stroke="rgb(255,203,56)" strokeWidth="41.97px"/>
+              </g>
+              <g transform="matrix(1.333165,0,0,1.333165,-394.224183,-889.007933)">
+                  <path d="M565.469,989.013L689.176,922.741" fill="none" stroke="rgb(255,203,56)" strokeWidth="41.97px"/>
+              </g>
+              <g transform="matrix(1.505478,0,0,1.959655,-523.510599,-1448.475269)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(1.761806,-1.499845,1.395278,1.638976,-2075.284988,-102.655805)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(2.462831,-0.552303,0.428813,1.912163,-1467.706468,-944.188464)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(1.903288,0.335663,-0.557299,3.160022,42.260474,-2794.373483)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(1.381101,-0.671043,0.91421,1.881574,-1243.26669,-913.982264)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(1.14391,0.288273,-0.219797,0.872188,20.160029,-658.796507)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(0.947423,-0.057863,0.042903,0.702485,-89.369358,-239.933104)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(0.804878,0.084378,-0.067576,0.644607,40.786345,-287.148746)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(1.681284,-0.402175,0.579689,2.423377,-1046.556457,-1555.379766)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(1.039739,-0.248713,0.29236,1.222205,-329.065629,-504.497813)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(1.273832,-0.30471,0.252214,1.054377,-574.977513,-323.329554)">
+                  <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+              </g>
+              <g transform="matrix(0.769663,-0.184109,0.243965,1.01989,80.54013,93.210495)">
+                  <g transform="matrix(1.397481,0.674915,-0.661435,0.779971,330.524004,-544.308694)">
+                      <circle cx="632.244" cy="1007.849" r="14.798" fill="rgb(255,203,56)"/>
+                  </g>
+              </g>
+          </g>
+    </svg>
   );
 }

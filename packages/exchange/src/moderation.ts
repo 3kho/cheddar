@@ -12,6 +12,11 @@ async function assertCheesemonger(tx: Tx, actorId: string) {
   if (!u?.ok) throw new ExchangeError("FORBIDDEN", "only Cheesemongers can do that");
 }
 
+async function assertSuperAdmin(tx: Tx, actorId: string) {
+  const [u] = await tx.select({ ok: users.isSuperAdmin }).from(users).where(eq(users.id, actorId));
+  if (!u?.ok) throw new ExchangeError("FORBIDDEN", "only super admins can do that");
+}
+
 async function lockUser(tx: Tx, userId: string) {
   const [u] = await tx.select().from(users).where(eq(users.id, userId)).for("update");
   if (!u) throw new ExchangeError("NOT_FOUND", "user not found");
@@ -30,9 +35,10 @@ export async function suspendUser(
   const reason = requireText(input.reason, "reason", 500);
   const now = (opts.now ?? (() => new Date()))();
   return runTx(db, async (tx) => {
-    await assertCheesemonger(tx, input.actorId);
+    await assertSuperAdmin(tx, input.actorId);
     if (input.userId === input.actorId) throw new ExchangeError("INVALID", "you can't suspend yourself");
     const u = await lockUser(tx, input.userId);
+    if (u.isSuperAdmin) throw new ExchangeError("INVALID", "remove their super admin role before suspending them");
     if (u.isCheesemonger) throw new ExchangeError("INVALID", "demote this Cheesemonger before suspending them");
     if (u.suspendedAt) throw new ExchangeError("INVALID", "already suspended");
     const { cancelled } = await cancelUserOrders(tx, u.id, "suspended", now);
@@ -50,7 +56,7 @@ export async function suspendUser(
 
 export async function unsuspendUser(db: AnyDb, input: { userId: string; actorId: string; note?: string }) {
   await runTx(db, async (tx) => {
-    await assertCheesemonger(tx, input.actorId);
+    await assertSuperAdmin(tx, input.actorId);
     const u = await lockUser(tx, input.userId);
     if (!u.suspendedAt) throw new ExchangeError("INVALID", "not suspended");
     await tx.update(users).set({ suspendedAt: null, suspendReason: null }).where(eq(users.id, u.id));
@@ -64,12 +70,13 @@ export async function unsuspendUser(db: AnyDb, input: { userId: string; actorId:
   });
 }
 
-/** Make or remove a Cheesemonger. You can't demote yourself (so there's always one left). */
+/** Make or remove a Cheesemonger (super admins only). Super admins stay Cheesemongers. */
 export async function setCheesemonger(db: AnyDb, input: { userId: string; actorId: string; value: boolean }) {
   await runTx(db, async (tx) => {
-    await assertCheesemonger(tx, input.actorId);
+    await assertSuperAdmin(tx, input.actorId);
     if (!input.value && input.userId === input.actorId) throw new ExchangeError("INVALID", "you can't demote yourself");
     const u = await lockUser(tx, input.userId);
+    if (!input.value && u.isSuperAdmin) throw new ExchangeError("INVALID", "remove their super admin role first");
     if (u.isBot) throw new ExchangeError("INVALID", "bots can't be Cheesemongers");
     if (input.value && u.suspendedAt) throw new ExchangeError("INVALID", "unsuspend them first");
     if (u.isCheesemonger === input.value) return;
@@ -77,6 +84,32 @@ export async function setCheesemonger(db: AnyDb, input: { userId: string; actorI
     await logEvent(tx, {
       actorId: input.actorId,
       action: input.value ? "user.promote" : "user.demote",
+      targetType: "user",
+      targetId: u.id,
+      details: { name: u.name, slackId: u.slackId },
+    });
+  });
+}
+
+/**
+ * Make or remove a super admin (super admins only). Making one also makes them a Cheesemonger.
+ * You can't remove yourself, so there's always one left.
+ */
+export async function setSuperAdmin(db: AnyDb, input: { userId: string; actorId: string; value: boolean }) {
+  await runTx(db, async (tx) => {
+    await assertSuperAdmin(tx, input.actorId);
+    if (!input.value && input.userId === input.actorId) throw new ExchangeError("INVALID", "you can't remove your own super admin role");
+    const u = await lockUser(tx, input.userId);
+    if (u.isBot) throw new ExchangeError("INVALID", "bots can't be super admins");
+    if (input.value && u.suspendedAt) throw new ExchangeError("INVALID", "unsuspend them first");
+    if (u.isSuperAdmin === input.value) return;
+    await tx
+      .update(users)
+      .set(input.value ? { isSuperAdmin: true, isCheesemonger: true } : { isSuperAdmin: false })
+      .where(eq(users.id, u.id));
+    await logEvent(tx, {
+      actorId: input.actorId,
+      action: input.value ? "user.super_admin" : "user.super_admin_remove",
       targetType: "user",
       targetId: u.id,
       details: { name: u.name, slackId: u.slackId },

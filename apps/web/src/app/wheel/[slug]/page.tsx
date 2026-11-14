@@ -1,20 +1,30 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
-import { Change, CheeseIcon, ClockIcon, MoldIcon, MouseIcon, PauseIcon, ShieldIcon, TickIcon } from "@/components/Icons";
+import { Change, CheeseIcon, ClockIcon, ListPlusIcon, MoldIcon, MouseIcon, PauseIcon, PencilIcon, ShieldIcon, TickIcon } from "@/components/Icons";
 import { LinkedActions } from "@/components/LinkedActions";
 import { Linkified } from "@/components/Linkified";
 import { Avatar, WheelIcon } from "@/components/Logo";
 import { OrderBookView } from "@/components/OrderBookView";
 import { PriceChart, type Series } from "@/components/PriceChart";
 import { SettleForm } from "@/components/SettleForm";
+import { SuggestOutcome } from "@/components/SuggestOutcome";
 import { Tabs } from "@/components/Tabs";
 import { TradePanel, type TradeWedge } from "@/components/TradePanel";
 import { WheelStatus, resolvedLabel } from "@/components/WheelCard";
 import { cancelOrderAction } from "@/lib/actions";
 import { formatChance, formatDate, formatLatta, formatShares, timeAgo } from "@/lib/format";
 import { bestPrice } from "@/lib/market";
-import { balancesOf, costBasis, getWheel, listWheels, topHolders, userMarketState, wheelActivity } from "@/lib/queries";
+import {
+  balancesOf,
+  costBasis,
+  getWheel,
+  listWheels,
+  topHolders,
+  userMarketState,
+  wheelActivity,
+  wheelOutcomeRequests,
+} from "@/lib/queries";
 import { currentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -46,13 +56,15 @@ export default async function WheelPage({
   const outcome = sp.o === "NO" ? "NO" : "YES";
   const ids = wheel.wedges.map((w) => w.id);
 
-  const [mine, bal, activity, holders, related, basis] = await Promise.all([
+  const takesSuggestions = wheel.allowAdditions && !binary && wheel.status === "open";
+  const [mine, bal, activity, holders, related, basis, suggestions] = await Promise.all([
     user ? userMarketState(user.id, ids) : Promise.resolve({ positions: [], orders: [] }),
     user ? balancesOf(user.id) : Promise.resolve({ available: 0, locked: 0 }),
     wheelActivity(ids),
     topHolders(selected.id),
     listWheels({ category: wheel.category ?? undefined, excludeId: wheel.id, limit: 5 }),
     user ? costBasis(user.id) : Promise.resolve(new Map<string, { bought: number; cost: number }>()),
+    takesSuggestions ? wheelOutcomeRequests(wheel.id) : Promise.resolve([]),
   ]);
   /** Cost of the shares still held, at the average buy price. */
   const heldCost = (wedgeId: string, o: "YES" | "NO", shares: number) => {
@@ -263,6 +275,14 @@ export default async function WheelPage({
             </div>
             <h1 className="text-pretty text-xl font-semibold leading-7 tracking-[-0.015em] sm:text-2xl">{wheel.title}</h1>
           </div>
+          {user?.isCheesemonger && !done && (
+            <Link
+              href={`/wheel/${wheel.slug}/edit`}
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] bg-surface-2 px-3 text-sm font-semibold text-muted hover:bg-hover hover:text-ink"
+            >
+              <PencilIcon size={14} /> Edit
+            </Link>
+          )}
         </header>
 
         {done && resolved && (
@@ -281,7 +301,7 @@ export default async function WheelPage({
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold leading-6">{resolved}</h2>
                 <p className="text-sm text-muted">
-                  {wheel.status === "moldy" ? "Voided. Every share paid ʟ0.50." : "Winning shares paid ʟ1 each; the rest paid nothing."}
+                  {wheel.status === "moldy" ? "Voided. Every share paid 0.50 Lc." : "Winning shares paid 1 Lc each; the rest paid nothing."}
                   {settlement?.reviewedAt && ` Ripened ${formatDate(settlement.reviewedAt)}.`}
                 </p>
               </div>
@@ -438,6 +458,16 @@ export default async function WheelPage({
           </section>
         )}
 
+        {takesSuggestions && (
+          <SuggestOutcome
+            wheelId={wheel.id}
+            pending={suggestions.map((x) => ({ id: x.id, label: x.label }))}
+            canSuggest={!!user && !user.isSuspended && !user.isMouseFunder}
+            loginHref={user ? undefined : `/api/auth/login?returnTo=/wheel/${slug}`}
+            isCheesemonger={!!user?.isCheesemonger}
+          />
+        )}
+
         {!done && (
           <details open className="group/ob rounded-xl bg-surface shadow-mid">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl p-4 hover:bg-hover [&::-webkit-details-marker]:hidden">
@@ -498,6 +528,15 @@ export default async function WheelPage({
               <dt className="text-xs font-medium text-muted">Resolver</dt>
               <dd className="mt-0.5 font-medium text-primary">Cheesemongers</dd>
             </div>
+            {wheel.allowAdditions && !binary && (
+              <div className="sm:col-span-3">
+                <dt className="text-xs font-medium text-muted">Outcomes</dt>
+                <dd className="mt-0.5 flex items-center gap-1.5 font-medium">
+                  <ListPlusIcon size={15} />
+                  <span>Open to new ones. If one is added, every existing outcome gains one more way to resolve No.</span>
+                </dd>
+              </div>
+            )}
             <div className="sm:col-span-3">
               <dt className="text-xs font-medium text-muted">Market maker</dt>
               <dd className="mt-0.5 flex items-center gap-1.5 font-medium">
@@ -538,6 +577,7 @@ export default async function WheelPage({
           <LinkedActions
             wheelId={wheel.id}
             binary={binary}
+            fixedOutcomes={!wheel.allowAdditions}
             wedges={tradeWedges.map((t) => ({ id: t.id, label: t.label, freeYes: t.freeYes, freeNo: t.freeNo }))}
           />
         )}

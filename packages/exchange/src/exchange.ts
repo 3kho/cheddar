@@ -259,7 +259,7 @@ export class Exchange {
     if (input.side === "BUY") {
       lockedTicks = input.price * input.qty;
       if ((await lockedBalance(tx, mine.available)) < lockedTicks) {
-        throw new ExchangeError("INSUFFICIENT_FUNDS", "not enough Latta for this order");
+        throw new ExchangeError("INSUFFICIENT_FUNDS", "not enough Latta Cheese (Lc) for this order");
       }
     } else {
       const [pos] = await tx

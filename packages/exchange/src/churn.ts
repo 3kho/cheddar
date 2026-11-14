@@ -177,8 +177,8 @@ async function isActiveFunder(tx: AnyDb | Tx, slackId: string | null): Promise<b
 }
 
 async function assertCheesemonger(tx: Tx, userId: string) {
-  const [u] = await tx.select({ ok: users.isCheesemonger }).from(users).where(eq(users.id, userId));
-  if (!u?.ok) throw new ExchangeError("FORBIDDEN", "only Cheesemongers can manage Mouse funders");
+  const [u] = await tx.select({ ok: users.isSuperAdmin }).from(users).where(eq(users.id, userId));
+  if (!u?.ok) throw new ExchangeError("FORBIDDEN", "only super admins can manage Mouse funders");
 }
 
 export interface SweepResult {

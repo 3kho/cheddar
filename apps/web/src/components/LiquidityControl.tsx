@@ -80,7 +80,7 @@ export function LiquidityControl({ wheelId, liquidity, outcomes }: { wheelId: st
       </div>
       <p className="mt-1.5 text-[11px] text-muted">
         {n
-          ? `About ${Math.max(1, Math.round(n / 25))} shares per cent near 50%. Worst case The Mouse loses ʟ${maxLoss.toLocaleString("en-US")} here.`
+          ? `About ${Math.max(1, Math.round(n / 25))} shares per cent near 50%. Worst case The Mouse loses ${maxLoss.toLocaleString("en-US")} Lc here.`
           : "The Mouse won't quote on this wheel."}
       </p>
       {msg && !msg.ok && <Notice result={msg} />}

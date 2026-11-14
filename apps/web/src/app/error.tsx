@@ -44,7 +44,7 @@ export default function PageError({ error, reset }: { error: Error & { digest?: 
       <CheeseIcon size={52} strokeWidth={1.4} className="mx-auto text-accent" />
       <h1 className="mt-4 text-xl font-bold">{retrying ? "Reloading…" : "This page didn't load"}</h1>
       <p className="mt-2 text-sm text-muted">
-        {retrying ? "That took a hiccup. Trying again." : "Something went wrong loading this page. Your Latta and orders are safe."}
+        {retrying ? "That took a hiccup. Trying again." : "Something went wrong loading this page. Your Latta Cheese and orders are safe."}
       </p>
       {!retrying && (
         <div className="mt-6 flex justify-center gap-2">
