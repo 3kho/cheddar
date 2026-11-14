@@ -495,7 +495,15 @@ export async function searchUsers(opts: { q?: string; filter?: "all" | "suspende
   const where = and(...conds);
   const [rows, total] = await Promise.all([
     db
-      .select({ u: users, balance: accounts.balance, funder: mouseFunders.slackId })
+      .select({
+        u: users,
+        balance: accounts.balance,
+        funder: mouseFunders.slackId,
+        // The latest Hackatime sync for this person, for the admin list.
+        syncStatus: sql<string | null>`(SELECT s.status::text FROM churn_syncs s WHERE s.user_id = ${users.id} ORDER BY s.id DESC LIMIT 1)`,
+        syncError: sql<string | null>`(SELECT s.error FROM churn_syncs s WHERE s.user_id = ${users.id} ORDER BY s.id DESC LIMIT 1)`,
+        syncAt: sql<Date | null>`(SELECT s.fetched_at FROM churn_syncs s WHERE s.user_id = ${users.id} ORDER BY s.id DESC LIMIT 1)`,
+      })
       .from(users)
       .leftJoin(accounts, and(eq(accounts.userId, users.id), eq(accounts.kind, "user_available")))
       .leftJoin(mouseFunders, and(eq(mouseFunders.slackId, users.slackId), eq(mouseFunders.active, true)))

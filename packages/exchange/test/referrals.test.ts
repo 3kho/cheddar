@@ -63,7 +63,7 @@ describe("referrals", () => {
     expect(await attachReferral(db, { refereeId: carol.id, code: susCode })).toBeNull();
   });
 
-  it("pays both people on the first real trade, exactly once, and the books still balance", async () => {
+  it("pays both people on the first real trade (40 Lc to the inviter, 20 Lc to the invited), exactly once, and the books still balance", async () => {
     const monger = await makeUser(db, "monger", { isCheesemonger: true });
     const alice = await makeUser(db, "alice");
     const bob = await makeUser(db, "bob");
@@ -91,23 +91,28 @@ describe("referrals", () => {
     expect((await referralSummary(db, bob.id)).invitedBy).toMatchObject({ id: alice.id, status: "paid" });
   });
 
-  it("stops paying the inviter at the cap but still welcomes the invited person", async () => {
+  it("has no limit on how many invited people the inviter earns on", async () => {
     const monger = await makeUser(db, "monger", { isCheesemonger: true });
     const alice = await makeUser(db, "alice");
     await fund(db, monger.id, 1_000_000);
     const { wedges } = await makeWheel(db, monger.id, ["Yes"]);
     const code = await ensureReferralCode(db, alice.id);
-    const cfg = { ...DEFAULT_REFERRAL, cap: 1 };
-    const results = [];
-    for (const name of ["b1", "b2"]) {
+    const people = ["b1", "b2", "b3", "b4"];
+    for (const name of people) {
       const u = await makeUser(db, name);
       await fund(db, u.id, 100_000);
       await attachReferral(db, { refereeId: u.id, code });
       await trade(u.id, wedges[0]!.id, monger.id, 20);
-      results.push(await payReferralIfDue(db, { refereeId: u.id }, cfg));
+      expect(await payReferralIfDue(db, { refereeId: u.id })).toMatchObject({
+        referrerTicks: DEFAULT_REFERRAL.referrerTicks,
+        refereeTicks: DEFAULT_REFERRAL.refereeTicks,
+        note: null,
+      });
     }
-    expect(results[0]).toMatchObject({ referrerTicks: cfg.referrerTicks, note: null });
-    expect(results[1]).toMatchObject({ referrerTicks: 0, refereeTicks: cfg.refereeTicks, note: "inviter reached the referral cap" });
+    expect(await referralSummary(db, alice.id)).toMatchObject({
+      rewarded: people.length,
+      earnedTicks: people.length * DEFAULT_REFERRAL.referrerTicks,
+    });
   });
 
   it("keeps a suspended invited person pending until they're back", async () => {

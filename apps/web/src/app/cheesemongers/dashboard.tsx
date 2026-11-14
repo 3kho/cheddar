@@ -21,7 +21,7 @@ import {
 } from "@/lib/actions";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
-import { formatDate, formatLatta } from "@/lib/format";
+import { formatDate, formatLatta, timeAgo } from "@/lib/format";
 import {
   PAGE_SIZE,
   activeFunders,
@@ -384,7 +384,7 @@ async function UsersTab({ me, q, filter, page }: { me: SessionUser; q?: string; 
         <Empty>No users found.</Empty>
       ) : (
         <ul className="divide-y divide-line rounded-xl border border-line bg-surface">
-          {rows.map(({ u, balance, funder }) => (
+          {rows.map(({ u, balance, funder, syncStatus, syncError, syncAt }) => (
             <li key={u.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
               <Avatar slackId={u.slackId} name={u.name} size={32} />
               <div className="min-w-0 flex-1">
@@ -403,7 +403,23 @@ async function UsersTab({ me, q, filter, page }: { me: SessionUser; q?: string; 
                 </div>
                 <div className="text-xs text-muted">
                   <span className="font-mono">{u.slackId ?? "no Slack"}</span> · {formatLatta(balance ?? 0)} ·{" "}
-                  {u.hackatimeUserId ? `Hackatime #${u.hackatimeUserId}` : u.slackId ? "Hackatime via Slack ID" : "Hackatime not linked"} · joined {formatDate(u.createdAt)}
+                  {u.hackatimeUserId
+                    ? `Hackatime #${u.hackatimeUserId}`
+                    : u.slackId
+                      ? "Hackatime via Slack ID"
+                      : "Hackatime not linked"}
+                  {" · "}
+                  {!syncStatus
+                    ? "not synced yet"
+                    : syncStatus === "error"
+                      ? syncError?.startsWith("PRIVATE")
+                        ? "stats private"
+                        : syncError?.startsWith("NOT_FOUND")
+                          ? "no Hackatime coding found"
+                          : "last sync failed"
+                      : syncStatus === "skipped_untrusted"
+                        ? "flagged on Hackatime"
+                        : `synced ${timeAgo(new Date(syncAt!))}`} · joined {formatDate(u.createdAt)}
                   {u.suspendedAt && u.suspendReason && <span className="text-no"> · “{u.suspendReason}”</span>}
                 </div>
               </div>

@@ -48,7 +48,6 @@ export function ValueChart({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-1.5 text-sm font-medium text-muted">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
             {label}
           </div>
           <div className="tabular mt-1 text-[30px] font-semibold leading-none tracking-tight">{formatLatta(shown)}</div>

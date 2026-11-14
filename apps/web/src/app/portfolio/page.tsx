@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ActionButton } from "@/components/ActionButton";
-import { CheeseIcon, SparklesIcon } from "@/components/Icons";
+import { SparklesIcon } from "@/components/Icons";
 import { Avatar, WheelIcon } from "@/components/Logo";
 import { ValueChart } from "@/components/ValueChart";
 import { cancelOrderAction, syncNowAction } from "@/lib/actions";
@@ -95,11 +95,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
               <h1 className="truncate text-2xl font-semibold tracking-[-0.015em]">{user.name ?? "Hack Clubber"}</h1>
               <p className="text-sm text-muted">
                 {stats.joined ? `Joined ${stats.joined.toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : "Hack Clubber"}
-                {user.isCheesemonger && (
-                  <span className="ml-1 inline-flex items-center gap-1 align-[-2px]">
-                    · <CheeseIcon size={13} className="text-accent" /> Cheesemonger
-                  </span>
-                )}
+                {user.isCheesemonger && " · Cheesemonger"}
               </p>
             </div>
           </div>
@@ -123,7 +119,6 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
           </dl>
           <div className="mt-auto flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-[13px] max-md:mt-3 md:mt-3">
             <span className="text-muted">
-              <CheeseIcon size={14} className="mr-1 inline-block align-[-2px] text-accent" />
               Churn
               {user.isMouseFunder ? (
                 ": your hours feed The Mouse"

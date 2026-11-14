@@ -7,8 +7,7 @@
  *  - the invited person must be a brand-new account (made within a day of signing in via the link);
  *  - the reward is paid on their first real trade, once their total traded value reaches a minimum
  *    (so a one-cent poke doesn't count), and never twice;
- *  - the inviter earns on at most `cap` invited people; past that, the invited person still gets
- *    their welcome bonus but the inviter doesn't;
+ *  - there's no limit on how many people one person can invite;
  *  - suspended accounts and bots never earn, and nobody can invite themselves.
  */
 import { randomBytes } from "node:crypto";
@@ -23,16 +22,13 @@ export interface ReferralConfig {
   referrerTicks: number;
   /** Paid to the person who was invited (ticks). */
   refereeTicks: number;
-  /** Most invited people one person can earn a reward on. */
-  cap: number;
   /** Total traded value (ticks) the invited person needs before the reward pays. */
   minVolumeTicks: number;
 }
 
 export const DEFAULT_REFERRAL: ReferralConfig = {
-  referrerTicks: 20 * TICKS_PER_LATTA,
-  refereeTicks: 10 * TICKS_PER_LATTA,
-  cap: 10,
+  referrerTicks: 40 * TICKS_PER_LATTA,
+  refereeTicks: 20 * TICKS_PER_LATTA,
   minVolumeTicks: 5 * TICKS_PER_LATTA,
 };
 
@@ -150,15 +146,9 @@ export async function payReferralIfDue(
 
     const [referrer] = await tx.select().from(users).where(eq(users.id, ref.referrerId));
     const referrerOk = !!referrer && !referrer.isBot && !referrer.suspendedAt;
-    const [paidRow] = await tx
-      .select({ n: sql<number>`COUNT(*)::int` })
-      .from(referrals)
-      .where(and(eq(referrals.referrerId, ref.referrerId), eq(referrals.status, "paid"), sql`${referrals.referrerTicks} > 0`));
-    const underCap = (paidRow?.n ?? 0) < cfg.cap;
-
-    const referrerTicks = referrerOk && underCap ? cfg.referrerTicks : 0;
+    const referrerTicks = referrerOk ? cfg.referrerTicks : 0;
     const refereeTicks = cfg.refereeTicks;
-    const note = !referrerOk ? "inviter can't earn right now" : !underCap ? "inviter reached the referral cap" : null;
+    const note = referrerOk ? null : "inviter can't earn right now";
 
     const issuance = await referralAccount(tx);
     const deltas = new Deltas().add(issuance, -(referrerTicks + refereeTicks));
@@ -187,7 +177,6 @@ export async function payReferralIfDue(
 
 export interface ReferralSummary {
   code: string;
-  cap: number;
   /** Invited people who've been paid for (the inviter earned on these). */
   rewarded: number;
   pending: number;
@@ -219,7 +208,6 @@ export async function referralSummary(db: AnyDb, userId: string, cfg: ReferralCo
     .where(eq(referrals.refereeId, userId));
   return {
     code,
-    cap: cfg.cap,
     rewarded: rows.filter((r) => r.status === "paid" && r.earned > 0).length,
     pending: rows.filter((r) => r.status === "pending").length,
     earnedTicks: rows.reduce((s, r) => s + r.earned, 0),

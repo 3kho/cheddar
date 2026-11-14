@@ -14,7 +14,6 @@ const num = (v: string | undefined, fallback: number) => {
 export const referralConfig: ReferralConfig = {
   referrerTicks: Math.round(num(process.env.CHEDDAR_REFERRAL_REFERRER_LATTA, DEFAULT_REFERRAL.referrerTicks / 100) * 100),
   refereeTicks: Math.round(num(process.env.CHEDDAR_REFERRAL_REFEREE_LATTA, DEFAULT_REFERRAL.refereeTicks / 100) * 100),
-  cap: Math.floor(num(process.env.CHEDDAR_REFERRAL_CAP, DEFAULT_REFERRAL.cap)),
   minVolumeTicks: Math.round(num(process.env.CHEDDAR_REFERRAL_MIN_TRADE_LATTA, DEFAULT_REFERRAL.minVolumeTicks / 100) * 100),
 };
 
