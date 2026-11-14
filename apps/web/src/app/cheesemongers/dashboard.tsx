@@ -403,7 +403,7 @@ async function UsersTab({ me, q, filter, page }: { me: SessionUser; q?: string; 
                 </div>
                 <div className="text-xs text-muted">
                   <span className="font-mono">{u.slackId ?? "no Slack"}</span> · {formatLatta(balance ?? 0)} ·{" "}
-                  {u.hackatimeUserId ? `Hackatime #${u.hackatimeUserId}` : "Hackatime not linked"} · joined {formatDate(u.createdAt)}
+                  {u.hackatimeUserId ? `Hackatime #${u.hackatimeUserId}` : u.slackId ? "Hackatime via Slack ID" : "Hackatime not linked"} · joined {formatDate(u.createdAt)}
                   {u.suspendedAt && u.suspendReason && <span className="text-no"> · “{u.suspendReason}”</span>}
                 </div>
               </div>

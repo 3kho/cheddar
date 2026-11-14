@@ -29,8 +29,18 @@ import {
 import { ExchangeError, runTx } from "./errors";
 import { cancelUserOrders } from "./exchange";
 import { logEvent } from "./log";
-import type { HackatimeClient, TrustLevel } from "./hackatime";
+import { HackatimeError, type HackatimeClient, type TrustLevel } from "./hackatime";
 import { Deltas, adjustPosition, churnIssuanceAccount, lockedBalance, postEntry, userAccounts } from "./ledger";
+
+/**
+ * Two ways a lookup by Slack id can fail that aren't "Hackatime is down": the person's stats are
+ * private (403), or they've never used Hackatime (404). They're recorded with these prefixes in
+ * churn_syncs.error so the app can tell people what to do, and the sweep doesn't hammer them.
+ */
+export const CHURN_PRIVATE = "PRIVATE";
+export const CHURN_NOT_FOUND = "NOT_FOUND";
+/** How long the scheduled sweep leaves a private / not-found person alone before checking again. */
+const SOFT_FAIL_RETRY_HOURS = 3;
 
 export const LATTA_PER_HOUR = 10;
 export const TICKS_PER_LATTA = 100;
@@ -84,9 +94,9 @@ export async function syncUser(db: AnyDb, client: HackatimeClient, userId: strin
   const [u] = await db.select().from(users).where(eq(users.id, userId));
   if (!u) throw new ExchangeError("NOT_FOUND", "user not found");
   if (u.isBot) throw new ExchangeError("INVALID", "bots don't churn");
-  // Mouse funders don't need to link: Hackatime looks them up by Slack id.
-  if (!u.hackatimeUserId && !(await isActiveFunder(db, u.slackId))) {
-    throw new ExchangeError("INVALID", "user has no linked Hackatime account");
+  // Nobody has to link anything: with no linked Hackatime account, Hackatime is asked about their Slack id.
+  if (!u.hackatimeUserId && !u.slackId) {
+    throw new ExchangeError("INVALID", "user has no linked Hackatime account and no Slack id");
   }
 
   let snap: { lifetimeNonAiSeconds: number; trustLevel: TrustLevel };
@@ -97,7 +107,9 @@ export async function syncUser(db: AnyDb, client: HackatimeClient, userId: strin
       bearerToken: await opts.tokenFor?.(userId),
     });
   } catch (e) {
-    const error = (e as Error).message.slice(0, 500);
+    const code = e instanceof HackatimeError ? e.status : undefined;
+    const prefix = code === 403 ? `${CHURN_PRIVATE}: ` : code === 404 ? `${CHURN_NOT_FOUND}: ` : "";
+    const error = (prefix + (e as Error).message).slice(0, 500);
     await db.insert(churnSyncs).values({ userId, status: "error", error });
     return { userId, status: "error", creditedTicks: 0, error };
   }
@@ -137,7 +149,11 @@ export async function syncUser(db: AnyDb, client: HackatimeClient, userId: strin
   });
 }
 
-/** Sync every linked human, plus every active Mouse funder (by Slack id). Failures never stop the run. */
+/**
+ * Sync every human we can look up (a linked Hackatime account, or failing that their Slack id).
+ * People whose stats are private or who've never used Hackatime are only re-checked every few
+ * hours. Failures never stop the run.
+ */
 export async function syncAll(db: AnyDb, client: HackatimeClient, opts: ChurnOptions & { concurrency?: number } = {}) {
   const linked = await db
     .select({ id: users.id })
@@ -145,8 +161,13 @@ export async function syncAll(db: AnyDb, client: HackatimeClient, opts: ChurnOpt
     .where(
       and(
         eq(users.isBot, false),
-        sql`(${users.hackatimeUserId} IS NOT NULL OR EXISTS (
-          SELECT 1 FROM mouse_funders f WHERE f.slack_id = ${users.slackId} AND f.active))`,
+        sql`(${users.hackatimeUserId} IS NOT NULL OR ${users.slackId} IS NOT NULL)`,
+        sql`NOT EXISTS (
+          SELECT 1 FROM churn_syncs s
+          WHERE s.user_id = ${users.id} AND s.status = 'error'
+            AND (s.error LIKE ${CHURN_PRIVATE + ":%"} OR s.error LIKE ${CHURN_NOT_FOUND + ":%"})
+            AND s.fetched_at > now() - make_interval(hours => ${SOFT_FAIL_RETRY_HOURS})
+            AND s.id = (SELECT MAX(id) FROM churn_syncs WHERE user_id = ${users.id}))`,
       ),
     );
   const results: ChurnResult[] = [];

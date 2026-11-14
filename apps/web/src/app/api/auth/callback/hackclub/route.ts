@@ -1,9 +1,9 @@
 import { cookies } from "next/headers";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { attachReferral } from "@cheddar/exchange";
 import { getDb } from "@/lib/db";
 import { REFERRAL_COOKIE } from "@/lib/referral";
-import { nextStepAfterLogin, upsertHcaUser } from "@/lib/accounts";
+import { nextStepAfterLogin, syncNow, upsertHcaUser } from "@/lib/accounts";
 import { env } from "@/lib/env";
 import { OAuthError, finishOAuth, getJson } from "@/lib/oauth";
 import { createSession } from "@/lib/session";
@@ -25,6 +25,14 @@ export async function GET(req: NextRequest) {
       }
       jar.delete(REFERRAL_COOKIE);
     }
+    // Read their Hackatime hours (by Slack id) straight away so their Latta is there on first look.
+    after(async () => {
+      try {
+        await syncNow(userId);
+      } catch (e) {
+        console.error(e);
+      }
+    });
     return NextResponse.redirect(new URL(await nextStepAfterLogin(userId, t.returnTo), env.appUrl));
   } catch (e) {
     const message = e instanceof OAuthError ? e.message : "Login failed. Please try again.";

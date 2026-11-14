@@ -33,6 +33,8 @@ export {
   syncAll,
   syncUser,
   ticksForSeconds,
+  CHURN_NOT_FOUND,
+  CHURN_PRIVATE,
   LATTA_PER_HOUR,
   TICKS_PER_LATTA,
   type ChurnOptions,

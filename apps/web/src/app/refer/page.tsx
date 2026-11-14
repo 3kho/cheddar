@@ -54,7 +54,7 @@ export default async function ReferPage() {
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted">
           <li>
             The reward pays when the person you invited makes their first real trade (at least {formatLatta(cfg.minVolumeTicks)} Lc traded). They
-            need Latta to do that, so they have to link Hackatime and code first.
+            need Latta to do that, so they have to code with Hackatime first.
           </li>
           <li>
             It only counts for brand-new accounts that signed up through your link. You can earn on up to {cfg.cap} invited people; after that

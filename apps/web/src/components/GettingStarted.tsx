@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { HackatimeStatus } from "@/lib/accounts";
 import type { SessionUser } from "@/lib/session";
 import { CheckIcon } from "./Icons";
 
@@ -9,19 +10,38 @@ interface State {
 }
 
 /** A short checklist for people who haven't traded yet. Disappears after their first trade. */
-export function GettingStarted({ user, state }: { user: SessionUser; state: State | null }) {
+export function GettingStarted({ user, state, status }: { user: SessionUser; state: State | null; status: HackatimeStatus | null }) {
   if (!state) return null;
   const steps: { done: boolean; title: string; body: React.ReactNode }[] = [
     {
-      done: !!user.hackatimeUserId,
-      title: "Link Hackatime",
+      done: state.cash > 0,
+      title: "Code with Hackatime",
       body: (
         <>
-          Latta Cheese is how you trade, and you earn <strong>10 Lc for every hour of non-AI coding</strong> on Hackatime.{" "}
-          {!user.hackatimeUserId && (
-            <a href="/api/hackatime/start" className="font-semibold underline underline-offset-2">
-              Link it now
-            </a>
+          Latta Cheese is how you trade, and you earn <strong>10 Lc for every hour of non-AI coding</strong> on Hackatime. We find your hours
+          through your Slack account, so there&apos;s nothing to link.
+          {status === "private" && (
+            <>
+              {" "}
+              <strong>Your Hackatime stats are private, so we can&apos;t see them yet.</strong>{" "}
+              <a href="https://hackatime.hackclub.com/my/settings" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">
+                Make them public
+              </a>{" "}
+              or{" "}
+              <a href="/api/hackatime/start" className="font-semibold underline underline-offset-2">
+                link your account
+              </a>
+              .
+            </>
+          )}
+          {(status === "not_found" || status === "no_slack") && (
+            <>
+              {" "}
+              <a href="/api/hackatime/start" className="font-semibold underline underline-offset-2">
+                Link your Hackatime account
+              </a>{" "}
+              if you already code with it.
+            </>
           )}
         </>
       ),
@@ -39,11 +59,6 @@ export function GettingStarted({ user, state }: { user: SessionUser; state: Stat
           )}
         </>
       ),
-    },
-    {
-      done: state.cash > 0,
-      title: "Get some Latta",
-      body: "Your coding hours turn into Latta Cheese automatically, about every 15 minutes while you code. It shows up in your Cash at the top.",
     },
     {
       done: state.traded,

@@ -8,6 +8,7 @@ import { WheelIcon } from "@/components/Logo";
 import type { Series } from "@/components/PriceChart";
 import { GettingStarted } from "@/components/GettingStarted";
 import { WheelCard } from "@/components/WheelCard";
+import { hackatimeStatus } from "@/lib/accounts";
 import { onboardingState } from "@/lib/profile";
 import { formatChance, formatLatta, timeAgo } from "@/lib/format";
 import { getWheel, listCategories, listWheels, wheelActivity, type WheelSort, type WheelView } from "@/lib/queries";
@@ -105,7 +106,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
         />
       </form>
 
-      {user && !user.isMouseFunder && !front0Done && <GettingStarted user={user} state={onboarding} />}
+      {user && !user.isMouseFunder && !front0Done && <GettingStarted user={user} state={onboarding} status={await hackatimeStatus(user)} />}
 
       {featured && (
         <div className="mb-10 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_362px]">

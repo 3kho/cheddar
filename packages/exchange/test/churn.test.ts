@@ -113,6 +113,7 @@ describe("Churn", () => {
     const [row] = await db.select().from(churnSyncs).where(eq(churnSyncs.userId, u.id));
     expect(row!.error).toMatch(/timeout/);
 
+    // With neither a linked Hackatime account nor a Slack id there is nothing to look up.
     const unlinked = await makeUser(db, "nolink");
     await expect(syncUser(db, ht, unlinked.id)).rejects.toBeInstanceOf(ExchangeError);
     const mouse = await ensureMouse(db);
@@ -169,13 +170,37 @@ describe("Mouse funders", () => {
     expect((await balances(db, (await ensureMouse(db)).id)).available).toBe(12_000);
   });
 
-  it("unlinked users who aren't funders are not synced, and private funder stats are reported", async () => {
+  it("looks people up by Slack id when they never linked, and tells private from missing", async () => {
     const monger = await makeUser(db, "monger", { isCheesemonger: true, isSuperAdmin: true });
-    await makeUser(db, "nolink", { slackId: "U0NOLINK1" });
-    const { userId } = await addMouseFunder(db, { slackId: "U0PRIVATE", addedById: monger.id });
-    ht.data.set("U0PRIVATE", new HackatimeError("Hackatime 403: user has disabled public stats", 403));
+    const plain = await makeUser(db, "plain", { slackId: "U0PLAIN01" });
+    const priv = await makeUser(db, "priv", { slackId: "U0PRIVATE1" });
+    const never = await makeUser(db, "never", { slackId: "U0NEVER01" });
+    await makeUser(db, "noslack"); // nothing to look up: skipped
+    const { userId: funder } = await addMouseFunder(db, { slackId: "U0FUNDER1", addedById: monger.id });
+    ht.set("U0PLAIN01", 3);
+    ht.data.set("U0PRIVATE1", new HackatimeError("Hackatime 403: user has disabled public stats", 403));
+    ht.data.set("U0FUNDER1", new HackatimeError("Hackatime 403: user has disabled public stats", 403));
+
     const results = await syncAll(db, ht);
-    expect(results).toEqual([expect.objectContaining({ userId, status: "error", error: expect.stringMatching(/public stats/) })]);
+    const by = (id: string) => results.find((r) => r.userId === id);
+    expect(by(plain.id)).toMatchObject({ status: "credited", creditedTicks: 3_000 });
+    expect((await balances(db, plain.id)).available).toBe(3_000);
+    expect(by(priv.id)).toMatchObject({ status: "error", error: expect.stringMatching(/^PRIVATE: .*public stats/) });
+    expect(by(never.id)).toMatchObject({ status: "error", error: expect.stringMatching(/^NOT_FOUND: /) });
+    expect(by(funder)).toMatchObject({ status: "error", error: expect.stringMatching(/public stats/) });
+    expect(results).toHaveLength(4);
+  });
+
+  it("leaves private and never-used accounts alone for a few hours, then checks again", async () => {
+    const priv = await makeUser(db, "priv", { slackId: "U0PRIVATE2" });
+    ht.data.set("U0PRIVATE2", new HackatimeError("Hackatime 403: user has disabled public stats", 403));
+    expect(await syncAll(db, ht)).toHaveLength(1);
+    expect(await syncAll(db, ht)).toHaveLength(0); // just checked
+
+    // They fix their settings; once the wait is over the sweep picks them up and pays.
+    ht.set("U0PRIVATE2", 2);
+    await db.update(churnSyncs).set({ fetchedAt: new Date(Date.now() - 4 * 3600_000) }).where(eq(churnSyncs.userId, priv.id));
+    expect(await syncAll(db, ht)).toEqual([expect.objectContaining({ userId: priv.id, status: "credited", creditedTicks: 2_000 })]);
   });
 
   it("adding an existing user sweeps their Latta, shares and open orders to The Mouse", async () => {

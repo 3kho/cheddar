@@ -4,6 +4,7 @@ import { CheeseIcon, SparklesIcon } from "@/components/Icons";
 import { Avatar, WheelIcon } from "@/components/Logo";
 import { ValueChart } from "@/components/ValueChart";
 import { cancelOrderAction, syncNowAction } from "@/lib/actions";
+import { hackatimeStatus } from "@/lib/accounts";
 import { formatDate, formatLatta, formatShares, timeAgo } from "@/lib/format";
 import { cashHistory, costBasis, portfolio, settledHistory, userStats } from "@/lib/queries";
 import { requireUser } from "@/lib/session";
@@ -31,6 +32,7 @@ type SP = { churn?: string; ticks?: string; tab?: string; view?: string };
 
 export default async function PortfolioPage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireUser("/portfolio");
+  const hk = await hackatimeStatus(user);
   const sp = await searchParams;
   // Old links used ?tab=history; that's now the Closed view of Positions.
   const tab = sp.tab === "history" ? "positions" : TABS.some(([k]) => k === sp.tab) ? sp.tab! : "positions";
@@ -125,25 +127,33 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
               Churn
               {user.isMouseFunder ? (
                 ": your hours feed The Mouse"
-              ) : user.hackatimeUserId ? (
+              ) : hk === "private" ? (
+                <>: your Hackatime stats are private, so we can&apos;t see your hours</>
+              ) : hk === "not_found" ? (
+                <>: no Hackatime coding found for your Slack account yet</>
+              ) : hk === "no_slack" ? (
+                ": link Hackatime to earn Latta Cheese from coding"
+              ) : (
                 <>
                   : <strong className="tabular text-ink">{formatLatta(p.churnEarnedTicks)}</strong> earned
                   {p.lastSync ? ` · synced ${timeAgo(p.lastSync.fetchedAt)}` : ""}
                 </>
-              ) : (
-                ": link Hackatime to earn Latta Cheese from coding"
               )}
             </span>
-            {!user.isMouseFunder &&
-              (user.hackatimeUserId ? (
-                <ActionButton action={syncNowAction} className="font-semibold text-ink hover:underline">
-                  Sync now
-                </ActionButton>
-              ) : (
-                <a href="/api/hackatime/start" className="rounded-[10px] bg-primary px-3 py-1 font-semibold text-white hover:bg-primary-hover">
-                  Link Hackatime
-                </a>
-              ))}
+            {!user.isMouseFunder && (
+              <span className="flex items-center gap-3">
+                {hk !== "no_slack" && (
+                  <ActionButton action={syncNowAction} className="font-semibold text-ink hover:underline">
+                    Sync now
+                  </ActionButton>
+                )}
+                {(hk === "private" || hk === "not_found" || hk === "no_slack") && (
+                  <a href="/api/hackatime/start" className="rounded-[10px] bg-primary px-3 py-1 font-semibold text-white hover:bg-primary-hover">
+                    Link Hackatime
+                  </a>
+                )}
+              </span>
+            )}
           </div>
         </section>
 

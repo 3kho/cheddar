@@ -1,6 +1,7 @@
 import "server-only";
+import { cache } from "react";
 import { and, desc, eq, isNull, sql, churnSyncs, mouseFunders, oauthTokens, users } from "@cheddar/db";
-import { syncUser, type ChurnResult } from "@cheddar/exchange";
+import { CHURN_NOT_FOUND, CHURN_PRIVATE, syncUser, type ChurnResult } from "@cheddar/exchange";
 import { decrypt, encrypt } from "./crypto";
 import { getDb, getHackatime } from "./db";
 import { env } from "./env";
@@ -20,22 +21,47 @@ async function freeName(db: Awaited<ReturnType<typeof getDb>>, base: string | nu
 }
 
 /**
- * Where to send someone right after they sign in with Hack Club Auth: link Hackatime first (it's
- * how they earn Latta), then the fair-play page, then wherever they were headed. Mouse funders
- * skip linking: their hours feed The Mouse by Slack ID.
+ * Where to send someone right after they sign in with Hack Club Auth: the fair-play page if they
+ * haven't accepted it yet, otherwise wherever they were headed. Nobody has to link Hackatime: their
+ * hours are looked up by their Slack id (linking is only a fallback, see hackatimeStatus).
  */
 export async function nextStepAfterLogin(userId: string, returnTo: string): Promise<string> {
   const db = await getDb();
-  const [u] = await db
-    .select({ hackatime: users.hackatimeUserId, fairPlay: users.fairPlayAcceptedAt, slackId: users.slackId })
-    .from(users)
-    .where(eq(users.id, userId));
-  const [funder] = u?.slackId
-    ? await db.select({ id: mouseFunders.slackId }).from(mouseFunders).where(and(eq(mouseFunders.slackId, u.slackId), eq(mouseFunders.active, true)))
-    : [];
-  if (!u?.hackatime && !funder) return `/api/hackatime/start?returnTo=${encodeURIComponent(returnTo)}`;
+  const [u] = await db.select({ fairPlay: users.fairPlayAcceptedAt }).from(users).where(eq(users.id, userId));
   return fairPlayStep(!!u?.fairPlay, returnTo);
 }
+
+/**
+ * Can we read this person's Hackatime hours?
+ *  - linked:    they linked a Hackatime account (we use that, with their token if stats are private)
+ *  - ok:        looked up by Slack id and it worked
+ *  - private:   their Hackatime stats are private, so we can't see their hours
+ *  - not_found: Hackatime has no coding for their Slack id yet
+ *  - no_slack:  no Slack id on their Hack Club account, so the only way is to link Hackatime
+ *  - unknown:   not checked yet (it happens within minutes of signing in)
+ */
+export type HackatimeStatus = "linked" | "ok" | "private" | "not_found" | "no_slack" | "unknown";
+
+export const hackatimeStatus = cache(
+  async (u: { id: string; slackId: string | null; hackatimeUserId: string | null }): Promise<HackatimeStatus> => {
+    if (u.hackatimeUserId) return "linked";
+    if (!u.slackId) return "no_slack";
+    const db = await getDb();
+    const [last] = await db
+      .select({ status: churnSyncs.status, error: churnSyncs.error })
+      .from(churnSyncs)
+      .where(eq(churnSyncs.userId, u.id))
+      .orderBy(desc(churnSyncs.id))
+      .limit(1);
+    if (!last) return "unknown";
+    if (last.status === "error") {
+      if (last.error?.startsWith(CHURN_PRIVATE)) return "private";
+      if (last.error?.startsWith(CHURN_NOT_FOUND)) return "not_found";
+      return "unknown"; // Hackatime was down, or similar: nothing for them to fix
+    }
+    return "ok";
+  },
+);
 
 /** The fair-play page if they haven't accepted yet, otherwise on to `returnTo`. */
 export function fairPlayStep(accepted: boolean, returnTo: string): string {

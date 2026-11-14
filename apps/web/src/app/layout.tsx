@@ -6,6 +6,7 @@ import { CheeseIcon, MouseIcon } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { Nav } from "@/components/Nav";
 import { themeScript } from "@/components/ThemeToggle";
+import { hackatimeStatus } from "@/lib/accounts";
 import { env } from "@/lib/env";
 import { currentUser } from "@/lib/session";
 import "./globals.css";
@@ -35,6 +36,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
+  const hk = user && !user.isMouseFunder ? await hackatimeStatus(user) : null;
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
@@ -71,16 +73,45 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </p>
           </div>
         )}
-        {user && !user.isMouseFunder && !user.hackatimeUserId && (
+        {hk && hk !== "linked" && hk !== "ok" && hk !== "unknown" && (
           <div className="border-b border-line bg-accent-soft">
             <p className="mx-auto flex max-w-[1350px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
               <span>
                 <CheeseIcon size={15} className="mr-1.5 inline-block align-[-3px] text-accent" />
-                <strong>Link Hackatime to start earning.</strong> Every hour of non-AI coding churns into 10 Latta Cheese (Lc).
+                {hk === "private" && (
+                  <>
+                    <strong>We can&apos;t see your Hackatime hours.</strong> Your stats are private. Make them public in Hackatime&apos;s settings
+                    and your Latta shows up within a few hours, or link your account instead.
+                  </>
+                )}
+                {hk === "not_found" && (
+                  <>
+                    <strong>No Hackatime coding found for your Slack account yet.</strong> Every hour of non-AI coding turns into 10 Latta Cheese
+                    (Lc). Already use Hackatime with a different account? Link it.
+                  </>
+                )}
+                {hk === "no_slack" && (
+                  <>
+                    <strong>Link Hackatime to start earning.</strong> Your Hack Club account has no Slack ID, so we can&apos;t find your hours
+                    automatically.
+                  </>
+                )}
               </span>
-              <a href="/api/hackatime/start" className="font-semibold underline underline-offset-2">
-                Link Hackatime →
-              </a>
+              <span className="flex items-center gap-3">
+                {hk === "private" && (
+                  <a href="https://hackatime.hackclub.com/my/settings" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">
+                    Hackatime settings ↗
+                  </a>
+                )}
+                {hk === "not_found" && (
+                  <a href="https://hackatime.hackclub.com" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">
+                    Get started with Hackatime ↗
+                  </a>
+                )}
+                <a href="/api/hackatime/start" className="font-semibold underline underline-offset-2">
+                  Link Hackatime →
+                </a>
+              </span>
             </p>
           </div>
         )}

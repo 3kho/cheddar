@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import {
+  CHURN_NOT_FOUND,
+  CHURN_PRIVATE,
   ExchangeError,
   RATES,
   payReferralIfDue,
@@ -188,7 +190,7 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
 export async function syncNowAction(): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
-    if (!u.hackatimeUserId) return fail("Link your Hackatime account first.");
+    if (!u.hackatimeUserId && !u.slackId) return fail("Link your Hackatime account first.");
     const r = await syncNow(u.id);
     revalidatePath("/", "layout");
     switch (r.status) {
@@ -201,6 +203,12 @@ export async function syncNowAction(): Promise<ActionResult> {
       case "skipped_untrusted":
         return fail("Hackatime has flagged your account, so Churn is paused. Ask in #hackatime-help.");
       default:
+        if (r.error?.startsWith(CHURN_PRIVATE)) {
+          return fail("Your Hackatime stats are private, so we can't see your hours. Make them public in Hackatime's settings, or link your Hackatime account.");
+        }
+        if (r.error?.startsWith(CHURN_NOT_FOUND)) {
+          return fail("Hackatime has no coding for your Slack account yet. Start coding with Hackatime, or link your Hackatime account if it uses a different one.");
+        }
         return fail(`Hackatime didn't answer: ${r.error ?? "unknown error"}`);
     }
   });
