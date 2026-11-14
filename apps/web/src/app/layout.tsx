@@ -6,14 +6,31 @@ import { CheeseIcon, MouseIcon } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { Nav } from "@/components/Nav";
 import { themeScript } from "@/components/ThemeToggle";
+import { env } from "@/lib/env";
 import { currentUser } from "@/lib/session";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
+const DESCRIPTION =
+  "Hack Club's play-money prediction market. Trade YES/NO on what happens next with Latta Cheese, earned by coding on Hackatime. No cash value.";
+
 export const metadata: Metadata = {
-  title: "Cheddar",
-  description: "Hack Club's prediction market. Trade Latta Cheese on what happens next.",
+  metadataBase: new URL(env.appUrl),
+  title: "Cheddar · Hack Club's prediction market",
+  description: DESCRIPTION,
+  applicationName: "Cheddar",
+  openGraph: {
+    type: "website",
+    siteName: "Cheddar",
+    title: "Cheddar · Hack Club's prediction market",
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Cheddar · Hack Club's prediction market",
+    description: DESCRIPTION,
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

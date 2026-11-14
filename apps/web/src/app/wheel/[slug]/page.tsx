@@ -31,7 +31,15 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const data = await getWheel((await params).slug);
-  return { title: data ? `${data.wheel.title} · Cheddar` : "Cheddar" };
+  if (!data) return { title: "Cheddar" };
+  const blurb = (data.wheel.description ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+  const description = blurb || `Trade on “${data.wheel.title}” with Latta Cheese on Cheddar, Hack Club's play-money prediction market.`;
+  return {
+    title: `${data.wheel.title} · Cheddar`,
+    description,
+    openGraph: { title: data.wheel.title, description },
+    twitter: { title: data.wheel.title, description },
+  };
 }
 
 /** Colours for the two sides of a 2-outcome wheel. */
