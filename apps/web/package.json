@@ -14,6 +14,7 @@
     "@cheddar/engine": "workspace:*",
     "@cheddar/exchange": "workspace:*",
     "@electric-sql/pglite": "^0.5.16",
+    "@vercel/analytics": "^2.0.1",
     "next": "16.4.6",
     "pg": "^8.23.1",
     "react": "19.3.1",
