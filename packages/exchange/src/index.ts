@@ -65,6 +65,16 @@ export { MAX_LIQUIDITY, MOUSE_LEVELS, mousePrices, mouseWheelIds, requoteWheel, 
 export { convertNo, mergePairs, mergeYesSet, type ConversionResult } from "./link";
 export { houseOutstanding } from "./house";
 export { addOutcome, requestOutcome, reviewOutcomeRequest, updateWheel, type WheelEdit } from "./outcomes";
+export {
+  DEFAULT_REFERRAL,
+  attachReferral,
+  ensureReferralCode,
+  isReferralCode,
+  payReferralIfDue,
+  referralSummary,
+  type ReferralConfig,
+  type ReferralSummary,
+} from "./referrals";
 export { RATES, humanWait, takeRate, type RateRule } from "./rate";
 export { resolveReport, submitReport } from "./reports";
 export * as lmsr from "./lmsr";

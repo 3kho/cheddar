@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
 import { ReportButton } from "@/components/ReportButton";
+import { ShareButton } from "@/components/ShareButton";
+import { ensureReferralCode } from "@cheddar/exchange";
+import { getDb } from "@/lib/db";
+import { env } from "@/lib/env";
+import { inviteUrl } from "@/lib/referral";
 import { Change, CheeseIcon, ClockIcon, ListPlusIcon, MoldIcon, MouseIcon, PauseIcon, PencilIcon, ShieldIcon, TickIcon } from "@/components/Icons";
 import { LinkedActions } from "@/components/LinkedActions";
 import { Linkified } from "@/components/Linkified";
@@ -58,6 +63,8 @@ export default async function WheelPage({
   const data = await getWheel(slug);
   if (!data) notFound();
   const { wheel, depth, history, settlement, creatorName, settlementBy, settlementProposedBy } = data;
+  // Logged-in people share a link that signs new people up as their invites.
+  const shareUrl = user ? inviteUrl(await ensureReferralCode(await getDb(), user.id), `/wheel/${wheel.slug}`) : `${env.appUrl}/wheel/${wheel.slug}`;
   const binary = wheel.wedges.length === 1;
   const pair = wheel.wedges.length === 2;
   const done = wheel.status === "resolved" || wheel.status === "moldy";
@@ -285,6 +292,11 @@ export default async function WheelPage({
             </div>
             <h1 className="text-pretty text-xl font-semibold leading-7 tracking-[-0.015em] sm:text-2xl">{wheel.title}</h1>
           </div>
+          <ShareButton
+            url={shareUrl}
+            title={wheel.title}
+            text={`${wheel.title} Trade on it with Latta Cheese on Cheddar.`}
+          />
           {user && !user.isSuspended && wheel.creatorId !== user.id && <ReportButton targetType="wheel" targetId={wheel.id} />}
           {user?.isCheesemonger && !done && (
             <Link

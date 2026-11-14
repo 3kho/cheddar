@@ -66,6 +66,27 @@ export interface ProposeInitial {
   allowAdditions: boolean;
 }
 
+const CRITERIA_TEMPLATE = `Resolves YES if: …
+Source: … (where the answer will be checked, ideally a link)
+Deadline: … (the date and time zone it has to happen by)
+Edge cases: … (what counts, what doesn't)
+Otherwise it resolves NO.`;
+
+/** Gentle nudges that make a question easier to settle. Never blocks submitting. */
+function criteriaTips(text: string): string[] {
+  const t = text.toLowerCase();
+  const tips: string[] = [];
+  if (text.trim().length < 60) tips.push("Add a bit more detail so there's no room for argument.");
+  if (!/(according to|source|per |as reported|announce|official|https?:\/\/|slack|github|hackatime|website|post)/.test(t)) {
+    tips.push("Say where the answer will come from (a link, a Slack channel, an official post).");
+  }
+  if (!/(\bby\b|before|until|deadline|\bon\b|\d{4}|\d{1,2}[/-]\d{1,2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|today|tomorrow|week|month|year)/.test(t)) {
+    tips.push("Say when it has to happen by.");
+  }
+  if (!/(otherwise|if not|else|\bno\b)/.test(t)) tips.push("Say what happens if it doesn't (e.g. “Otherwise it resolves No”).");
+  return tips;
+}
+
 const PRESETS = [
   ["1d", "1 day", 1],
   ["3d", "3 days", 3],
@@ -458,6 +479,24 @@ export function ProposeForm({
             className={`${field} py-2.5 leading-6`}
           />
         </Field>
+        <div className="-mt-3 space-y-1.5">
+          {!criteria.trim() && (
+            <button
+              type="button"
+              onClick={() => setCriteria(CRITERIA_TEMPLATE)}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              Use a template
+            </button>
+          )}
+          {criteria.trim() && criteriaTips(criteria).length > 0 && (
+            <ul className="space-y-0.5 text-xs text-muted" aria-label="Ways to make this clearer">
+              {criteriaTips(criteria).map((t) => (
+                <li key={t}>• {t}</li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <Field label="Context" hint="Optional background, links, or anything traders should know.">
           <textarea

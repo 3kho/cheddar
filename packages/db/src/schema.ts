@@ -21,6 +21,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -55,6 +56,8 @@ export const accountKindEnum = pgEnum("account_kind", [
   "churn_issuance",
   /** Where The Mouse's house-backed Latta comes from once its own funds run out. Goes negative. */
   "house_issuance",
+  /** Where referral rewards come from. Goes negative, like churn_issuance. */
+  "referral_issuance",
 ]);
 export const journalKindEnum = pgEnum("journal_kind", [
   "churn",
@@ -70,6 +73,8 @@ export const journalKindEnum = pgEnum("journal_kind", [
   "house_repay",
   /** Linked-outcome conversions and merges (pairs, full sets, No into Yes-on-the-rest). */
   "conversion",
+  /** A referral reward paid to the person who invited someone and to the person they invited. */
+  "referral",
 ]);
 export const wheelStatusEnum = pgEnum("wheel_status", ["open", "closed", "ripening", "resolved", "moldy"]);
 export const wedgeStatusEnum = pgEnum("wedge_status", [
@@ -113,6 +118,10 @@ export const users = pgTable(
     suspendReason: text("suspend_reason"),
     /** When they ticked the fair-play rules (no insider trading etc). Null until they do. */
     fairPlayAcceptedAt: ts("fair_play_accepted_at"),
+    /** Short code in this person's invite link (/r/<code>). Created the first time they need it. */
+    referralCode: text("referral_code").unique(),
+    /** Who invited them, set when they sign up through an invite link. */
+    referredById: uuid("referred_by_id").references((): AnyPgColumn => users.id),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [
@@ -351,11 +360,12 @@ export const accounts = pgTable(
             WHEN 'wedge_collateral' THEN ${t.wedgeId} IS NOT NULL AND ${t.userId} IS NULL
             WHEN 'churn_issuance' THEN ${t.userId} IS NULL AND ${t.wedgeId} IS NULL
             WHEN 'house_issuance' THEN ${t.userId} IS NULL AND ${t.wedgeId} IS NULL
+            WHEN 'referral_issuance' THEN ${t.userId} IS NULL AND ${t.wedgeId} IS NULL
           END`,
     ),
     // Only the issuance accounts may go negative; this is the double-spend backstop.
     // (Compared as text so the migration that adds 'house_issuance' can create it in one transaction.)
-    check("accounts_non_negative", sql`${t.kind}::text IN ('churn_issuance', 'house_issuance') OR ${t.balance} >= 0`),
+    check("accounts_non_negative", sql`${t.kind}::text IN ('churn_issuance', 'house_issuance', 'referral_issuance') OR ${t.balance} >= 0`),
   ],
 );
 
@@ -536,6 +546,40 @@ export const auditLog = pgTable(
     index("audit_log_at_idx").on(t.at),
     index("audit_log_action_idx").on(t.action, t.at),
     index("audit_log_target_idx").on(t.targetType, t.targetId),
+  ],
+);
+
+// ---------- referrals ----------
+
+/**
+ * One row per invited person. Created (pending) when they sign up through an invite link, paid
+ * when they make their first real trade. Rewards come from referral_issuance, so every Latta is
+ * accounted for (see audit).
+ */
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    referrerId: uuid("referrer_id")
+      .notNull()
+      .references(() => users.id),
+    /** Unique: a person can only ever be invited once. */
+    refereeId: uuid("referee_id")
+      .notNull()
+      .unique()
+      .references(() => users.id),
+    status: text("status").notNull().default("pending"),
+    referrerTicks: money("referrer_ticks").notNull().default(0),
+    refereeTicks: money("referee_ticks").notNull().default(0),
+    /** Why a reward was reduced or skipped, e.g. "referrer at the cap". */
+    note: text("note"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    paidAt: ts("paid_at"),
+  },
+  (t) => [
+    check("referrals_status", sql`${t.status} IN ('pending', 'paid', 'void')`),
+    check("referrals_not_self", sql`${t.referrerId} <> ${t.refereeId}`),
+    index("referrals_referrer_idx").on(t.referrerId, t.status),
   ],
 );
 

@@ -148,19 +148,32 @@ function toWheelView(w: typeof wheels.$inferSelect, ws: WedgeView[]): WheelView 
   };
 }
 
-export type WheelSort = "trending" | "new" | "volume" | "resolved";
+export type WheelSort = "trending" | "new" | "volume" | "closing" | "resolved";
 
 const DONE_STATUSES = ["resolved", "moldy"] as const;
 
 export async function listWheels(
-  opts: { category?: string; q?: string; sort?: WheelSort; limit?: number; excludeId?: string } = {},
+  opts: { category?: string; q?: string; sort?: WheelSort; limit?: number; excludeId?: string; heldBy?: string } = {},
 ): Promise<WheelView[]> {
   const db = await getDb();
   const done = opts.sort === "resolved";
   const conds = [inArray(wheels.status, done ? [...DONE_STATUSES] : [...OPEN_STATUSES])];
   if (opts.category) conds.push(eq(wheels.category, opts.category));
-  if (opts.q) conds.push(sql`${wheels.title} ILIKE ${like(opts.q)}`);
+  // Every word has to match somewhere: the question, its background, the category or an outcome.
+  for (const word of searchWords(opts.q)) {
+    const w = like(word);
+    conds.push(
+      sql`(${wheels.title} ILIKE ${w} OR ${wheels.description} ILIKE ${w} OR ${wheels.category} ILIKE ${w}
+        OR EXISTS (SELECT 1 FROM wedges wd WHERE wd.wheel_id = ${wheels.id} AND wd.label ILIKE ${w}))`,
+    );
+  }
   if (opts.excludeId) conds.push(sql`${wheels.id} <> ${opts.excludeId}`);
+  if (opts.sort === "closing") conds.push(sql`${wheels.closesAt} IS NOT NULL AND ${wheels.status} = 'open'`);
+  if (opts.heldBy) {
+    conds.push(sql`EXISTS (
+      SELECT 1 FROM positions p JOIN wedges wd ON wd.id = p.wedge_id
+      WHERE wd.wheel_id = ${wheels.id} AND p.user_id = ${opts.heldBy} AND (p.yes_shares > 0 OR p.no_shares > 0))`);
+  }
   const ws = await db
     .select()
     .from(wheels)
@@ -176,6 +189,7 @@ export async function listWheels(
     trending: (a, b) => b.volume24hTicks * 3 + b.volumeTicks - (a.volume24hTicks * 3 + a.volumeTicks),
     volume: (a, b) => b.volumeTicks - a.volumeTicks,
     new: (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    closing: (a, b) => (a.closesAt?.getTime() ?? Infinity) - (b.closesAt?.getTime() ?? Infinity),
   };
   views.sort((a, b) => by[sort as Exclude<WheelSort, "resolved">](a, b) || b.createdAt.getTime() - a.createdAt.getTime());
   return opts.limit ? views.slice(0, opts.limit) : views;
@@ -349,6 +363,8 @@ export async function portfolio(userId: string) {
 export const PAGE_SIZE = { proposals: 10, users: 25, wheels: 25, logs: 50 } as const;
 
 /** ILIKE pattern for a user-typed search, with LIKE wildcards escaped. */
+/** Up to 6 search words, lowercased and deduplicated. */
+const searchWords = (q?: string) => [...new Set((q ?? "").toLowerCase().split(/\s+/).filter(Boolean))].slice(0, 6);
 const like = (q: string) => "%" + q.replace(/[%_\\]/g, "\\$&") + "%";
 
 export async function dashboardCounts() {
@@ -693,6 +709,7 @@ export async function settledHistory(userId: string) {
 // ---------- site-wide activity & leaderboard ----------
 
 export interface FeedRow extends ActivityRow {
+  userId: string;
   wedgeLabel: string;
   wheelTitle: string;
   wheelSlug: string;
@@ -705,7 +722,7 @@ export interface FeedRow extends ActivityRow {
 export async function globalActivity(opts: { limit?: number; minTicks?: number } = {}): Promise<FeedRow[]> {
   const db = await getDb();
   const r = (await db.execute(sql`
-    SELECT t.id, t.created_at AS at, t.wedge_id, t.qty, l.outcome, l.shares, l.cash, u.name, u.slack_id,
+    SELECT t.id, t.created_at AS at, t.wedge_id, t.qty, l.outcome, l.shares, l.cash, u.id AS user_id, u.name, u.slack_id,
            mu.name AS cp_name, COALESCE(mu.is_bot, false) AS cp_bot,
            w.label, wh.title, wh.slug, wh.category, wh.icon,
            (SELECT COUNT(*) FROM wedges x WHERE x.wheel_id = wh.id) = 1 AS binary
@@ -727,6 +744,7 @@ export async function globalActivity(opts: { limit?: number; minTicks?: number }
       outcome: "YES" | "NO";
       shares: number;
       cash: string | number;
+      user_id: string;
       name: string | null;
       slack_id: string | null;
       cp_name: string | null;
@@ -747,6 +765,7 @@ export async function globalActivity(opts: { limit?: number; minTicks?: number }
     outcome: x.outcome,
     qty: Number(x.qty),
     price: Math.round(Math.abs(Number(x.cash)) / Number(x.qty)),
+    userId: x.user_id,
     name: x.name,
     slackId: x.slack_id,
     counterparty: x.cp_name,

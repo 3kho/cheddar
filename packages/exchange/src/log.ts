@@ -22,6 +22,7 @@ export type AuditAction =
   | "user.demote"
   | "user.rename"
   | "report.resolve"
+  | "referral.pay"
   | "user.super_admin"
   | "user.super_admin_remove"
   | "wheel.pause"

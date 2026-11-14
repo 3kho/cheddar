@@ -86,6 +86,21 @@ export async function audit(db: AnyDb): Promise<string[]> {
         FROM accounts a, (SELECT SUM(credited_ticks) AS credited FROM churn_syncs) s
         WHERE a.kind = 'churn_issuance' AND -a.balance <> COALESCE(s.credited, 0)`,
   );
+  // Referral rewards are the only other place new Latta comes from, and every tick is on a paid referral.
+  await check(
+    "referral account touched by a non-referral entry",
+    sql`SELECT e.id, e.kind FROM ledger_lines l
+        JOIN journal_entries e ON e.id = l.entry_id
+        JOIN accounts a ON a.id = l.account_id
+        WHERE a.kind = 'referral_issuance' AND e.kind <> 'referral'`,
+  );
+  await check(
+    "issued referral Latta != paid referrals",
+    sql`SELECT (-a.balance)::text AS issued, COALESCE(r.paid, 0)::text AS paid
+        FROM accounts a,
+             (SELECT SUM(referrer_ticks + referee_ticks) AS paid FROM referrals WHERE status = 'paid') r
+        WHERE a.kind = 'referral_issuance' AND -a.balance <> COALESCE(r.paid, 0)`,
+  );
   // House backing only moves through house_backing / house_repay, and is never "owed" to anyone.
   await check(
     "house account touched by a non-house entry",

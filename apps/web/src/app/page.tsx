@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { FeaturedWheel } from "@/components/FeaturedWheel";
 import { Change, CheeseIcon, SearchIcon } from "@/components/Icons";
 import { WheelIcon } from "@/components/Logo";
 import type { Series } from "@/components/PriceChart";
+import { GettingStarted } from "@/components/GettingStarted";
 import { WheelCard } from "@/components/WheelCard";
+import { onboardingState } from "@/lib/profile";
 import { formatChance, formatLatta } from "@/lib/format";
 import { getWheel, listCategories, listWheels, type WheelSort, type WheelView } from "@/lib/queries";
 import { currentUser } from "@/lib/session";
@@ -13,6 +16,8 @@ export const dynamic = "force-dynamic";
 const SORTS: Record<string, { sort: WheelSort; title: string }> = {
   trending: { sort: "trending", title: "Trending" },
   new: { sort: "new", title: "New" },
+  closing: { sort: "closing", title: "Closing soon" },
+  mine: { sort: "trending", title: "My wheels" },
   resolved: { sort: "resolved", title: "Resolved" },
 };
 
@@ -22,14 +27,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
   const { c, q, sort } = await searchParams;
   const mode = SORTS[sort ?? "trending"] ?? SORTS.trending!;
   const query = q?.trim() || undefined;
-  const [wheels, user, categories] = await Promise.all([
-    listWheels({ category: c, q: query, sort: mode.sort }),
-    currentUser(),
+  const user = await currentUser();
+  const onboarding = user && !user.isMouseFunder ? await onboardingState(user.id) : null;
+  const front0Done = !onboarding || onboarding.traded;
+  if (sort === "mine" && !user) redirect("/api/auth/login?returnTo=/%3Fsort%3Dmine");
+  const [wheels, categories] = await Promise.all([
+    listWheels({ category: c, q: query, sort: mode.sort, heldBy: sort === "mine" ? user?.id : undefined }),
     listCategories(),
   ]);
 
   // Feature the hottest wheel, with movers and hot categories beside it, on the plain front page only.
-  const front = !c && !query && mode.sort === "trending";
+  const front = !c && !query && mode.sort === "trending" && sort !== "mine";
   const featured = front && wheels[0] && wheels[0].volumeTicks > 0 ? wheels[0] : null;
   const now = Date.now();
   let featuredSeries: Series[] = [];
@@ -60,7 +68,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
     : [];
 
   const heading = query ? `Results for “${query}”` : c ? c : front ? "All markets" : mode.title;
-  const sortQs = mode.sort === "trending" ? "" : `sort=${mode.sort}&`;
+  const sortQs = !sort || sort === "trending" ? "" : `sort=${sort}&`;
 
   return (
     <div>
@@ -74,6 +82,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
           className="h-10 w-full rounded-[12px] bg-surface-2 pl-10 pr-3 text-sm font-medium outline-none placeholder:text-muted/70 focus:ring-3 focus:ring-surface-2"
         />
       </form>
+
+      {user && !user.isMouseFunder && !front0Done && <GettingStarted user={user} state={onboarding} />}
 
       {featured && (
         <div className="mb-10 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_362px]">
@@ -129,7 +139,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
         <div className="rounded-2xl border border-dashed border-line px-6 py-16 text-center">
           <CheeseIcon size={44} strokeWidth={1.5} className="mx-auto text-accent" />
           <h2 className="mt-3 text-lg font-semibold">
-            {query || c ? "Nothing matches that" : mode.sort === "resolved" ? "Nothing has ripened yet" : "No wheels on the board yet"}
+            {query || c
+              ? "Nothing matches that"
+              : sort === "mine"
+                ? "You don't hold anything yet"
+                : sort === "closing"
+                  ? "Nothing has a close date coming up"
+                  : mode.sort === "resolved"
+                    ? "Nothing has ripened yet"
+                    : "No wheels on the board yet"}
           </h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted">
             Wheels are questions about what happens next in Hack Club. Anyone can propose one; a Cheesemonger approves it.

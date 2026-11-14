@@ -5,6 +5,7 @@ import { after } from "next/server";
 import {
   ExchangeError,
   RATES,
+  payReferralIfDue,
   cleanName,
   renameUser,
   resolveReport,
@@ -45,6 +46,7 @@ import { env } from "./env";
 import { formatLatta, parseLatta } from "./format";
 import { DEFAULT_SLIPPAGE, capLevels, levelsFor, quoteBuy, quoteSell } from "./market";
 import { requote, requoteAll, requoteForWedge } from "./mouse-job";
+import { referralConfig } from "./referral";
 import { depthFor, wheelChances } from "./queries";
 import { currentUser } from "./session";
 
@@ -61,6 +63,17 @@ async function attempt(fn: () => Promise<ActionResult>): Promise<ActionResult> {
     console.error(e);
     return fail("Something went wrong. Please try again.");
   }
+}
+
+/** After a trade: if this person was invited and has now traded enough, pay the referral reward. */
+function settleReferral(userId: string) {
+  after(async () => {
+    try {
+      await payReferralIfDue(await getDb(), { refereeId: userId }, referralConfig);
+    } catch (e) {
+      console.error(e);
+    }
+  });
 }
 
 /** `fairPlay: true` for anything that trades, proposes or suggests: those need the rules ticked first. */
@@ -96,6 +109,7 @@ export async function placeOrderAction(input: TradeInput): Promise<ActionResult>
   return attempt(async () => {
     const u = await signedIn(true);
     await takeRate(await getDb(), u.id, RATES.order);
+    settleReferral(u.id);
     const ex = await getExchange();
     const label = `${input.side === "BUY" ? "Bought" : "Sold"} ${input.outcome === "YES" ? "Yes" : "No"}`;
 

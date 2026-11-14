@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { CheckIcon, FlameIcon, SparkIcon } from "./Icons";
+import { CheckIcon, CheeseIcon, ClockIcon, FlameIcon, SparkIcon } from "./Icons";
 
 /** Second nav row: sort views, a divider, then categories. Plain text tabs, active one darker. */
-export function CategoryBar({ categories }: { categories: string[] }) {
+export function CategoryBar({ categories, loggedIn = false }: { categories: string[]; loggedIn?: boolean }) {
   const pathname = usePathname();
   const sp = useSearchParams();
   const onHome = pathname === "/";
@@ -30,6 +30,8 @@ export function CategoryBar({ categories }: { categories: string[] }) {
       <div className="no-scrollbar flex h-12 snap-x items-center overflow-x-auto px-4 lg:px-6">
         {item("/", onHome && !cat && sort === "trending", <><FlameIcon size={16} /> Trending</>)}
         {item("/?sort=new", onHome && !cat && sort === "new", <><SparkIcon size={16} /> New</>)}
+        {item("/?sort=closing", onHome && !cat && sort === "closing", <><ClockIcon size={16} /> Closing soon</>)}
+        {loggedIn && item("/?sort=mine", onHome && !cat && sort === "mine", <><CheeseIcon size={16} /> My wheels</>)}
         {item("/?sort=resolved", onHome && !cat && sort === "resolved", <><CheckIcon size={16} /> Resolved</>)}
         {categories.length > 0 && <span className="mx-2 h-3.5 w-0.5 shrink-0 rounded-full bg-surface-3" aria-hidden="true" />}
         {categories.map((c) => item(`/?c=${encodeURIComponent(c)}`, onHome && cat === c, c))}

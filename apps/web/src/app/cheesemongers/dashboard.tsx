@@ -464,7 +464,9 @@ async function ReportsTab() {
                   {r.wheelTitle ?? "A wheel"}
                 </Link>
               ) : (
-                <>Name: {r.userName ?? r.userSlack ?? "a user"}</>
+                <Link href={`/u/${r.targetId}`} className="hover:underline">
+                  Name: {r.userName ?? r.userSlack ?? "a user"}
+                </Link>
               )}
             </h3>
             <span className="text-xs text-muted">

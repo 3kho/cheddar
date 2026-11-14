@@ -98,10 +98,10 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
                     </span>
                     {i < 3 && <Medal rank={i + 1} />}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-base font-medium">
+                  <Link href={`/u/${r.id}`} className="min-w-0 flex-1 truncate text-base font-medium hover:underline">
                     {r.name ?? "Hack Clubber"}
                     {isMe && <span className="ml-1.5 text-sm text-muted">(you)</span>}
-                  </span>
+                  </Link>
                   <span className={`tabular min-w-20 text-right text-sm font-medium ${metric === "volume" ? "text-muted max-sm:hidden" : ""}`}>
                     {formatLatta(r.profit, { sign: true })}
                   </span>

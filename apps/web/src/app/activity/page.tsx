@@ -65,7 +65,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
                     </Link>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
                       <Avatar slackId={a.slackId} name={a.name} size={24} />
-                      <span className="font-semibold">{a.name ?? "Someone"}</span>
+                      <Link href={`/u/${a.userId}`} className="font-semibold hover:underline">{a.name ?? "Someone"}</Link>
                       <span className="text-muted">{a.side === "BUY" ? "bought" : "sold"}</span>
                       <span className={`font-semibold ${a.outcome === "YES" ? "text-yes" : "text-no"}`}>
                         {formatShares(a.qty)} {a.outcome === "YES" ? "Yes" : "No"}
