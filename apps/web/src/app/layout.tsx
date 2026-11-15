@@ -158,6 +158,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/how-it-works" className="hover:text-ink">How it works</Link>
               <Link href="/propose" className="hover:text-ink">Propose a wheel</Link>
               <Link href="/portfolio" className="hover:text-ink">Portfolio</Link>
+              <Link href="/privacy" className="hover:text-ink">Privacy</Link>
+              <Link href="/terms" className="hover:text-ink">Terms</Link>
+              <Link href="/credits" className="hover:text-ink">Credits</Link>
             </nav>
           </div>
         </footer>
