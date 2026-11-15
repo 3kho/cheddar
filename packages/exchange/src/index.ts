@@ -53,8 +53,11 @@ export {
 } from "./hackatime";
 export { logEvent, type AuditAction, type AuditEvent } from "./log";
 export {
+  DEFAULT_CATEGORY,
   MAX_NAME_LENGTH,
+  addCategory,
   cleanName,
+  removeCategory,
   pauseWheel,
   renameUser,
   resumeWheel,

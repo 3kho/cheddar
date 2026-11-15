@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProposeForm } from "@/components/ProposeForm";
-import { getWheel } from "@/lib/queries";
+import { allCategories, getWheel } from "@/lib/queries";
 import { requireCheesemonger } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ export default async function EditWheelPage({ params }: { params: Promise<{ slug
         </p>
       ) : (
         <ProposeForm
+          categories={await allCategories()}
           mode={{ kind: "wheel", id: wheel.id, slug: wheel.slug, wedges: wheel.wedges.map((w) => ({ id: w.id, label: w.label })) }}
           initial={{
             title: wheel.title,

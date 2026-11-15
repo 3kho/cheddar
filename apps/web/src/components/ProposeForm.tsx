@@ -26,7 +26,6 @@ import {
 } from "./Icons";
 import { WheelIcon, categoryLook } from "./Logo";
 
-const CATEGORIES = ["Hack Club", "Events", "YSWS", "Hackatime", "Slack", "Tech", "Fun"];
 const MAX_OUTCOMES = 30;
 const ICON_PX = 128;
 const MAX_ICON_CHARS = 200_000;
@@ -105,7 +104,10 @@ export function ProposeForm({
   children,
   mode = { kind: "propose" },
   initial,
+  categories: CATEGORIES,
 }: {
+  /** The categories super admins have set up. */
+  categories: string[];
   children?: React.ReactNode;
   mode?: ProposeMode;
   initial?: ProposeInitial;
@@ -119,7 +121,7 @@ export function ProposeForm({
 
   const [kind, setKind] = useState<"binary" | "multi">(startMulti ? "multi" : "binary");
   const [title, setTitle] = useState(initial?.title ?? "");
-  const [category, setCategory] = useState(initial?.category ?? "Hack Club");
+  const [category, setCategory] = useState(initial?.category ?? CATEGORIES[0] ?? "Hack Club");
   const [criteria, setCriteria] = useState(initial?.resolutionCriteria ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   // Wheel mode: renames for the live outcomes. `outcomes` holds the new ones.

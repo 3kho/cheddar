@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProposeForm } from "@/components/ProposeForm";
 import { formatDate } from "@/lib/format";
-import { proposalById } from "@/lib/queries";
+import { allCategories, proposalById } from "@/lib/queries";
 import { requireCheesemonger } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
         </p>
       ) : (
         <ProposeForm
+          categories={await allCategories()}
           mode={{ kind: "proposal", id: p.id }}
           initial={{
             title: p.title,

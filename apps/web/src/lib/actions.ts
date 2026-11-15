@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import {
   CHURN_NOT_FOUND,
+  addCategory,
+  removeCategory,
   CHURN_PRIVATE,
   ExchangeError,
   RATES,
@@ -521,6 +523,26 @@ export async function removeFunderAction(slackId: string): Promise<ActionResult>
     await removeMouseFunder(await getDb(), { slackId, removedById: u.id });
     revalidatePath("/admin");
     return { ok: true, message: "Removed. Their future Churn goes to them." };
+  });
+}
+
+// ---------- categories ----------
+
+export async function addCategoryAction(name: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await addCategory(await getDb(), { name, actorId: u.id });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Category added." };
+  });
+}
+
+export async function removeCategoryAction(name: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    const { moved } = await removeCategory(await getDb(), { name, actorId: u.id });
+    revalidatePath("/", "layout");
+    return { ok: true, message: moved ? `Removed. ${moved} wheel${moved === 1 ? "" : "s"} moved to Hack Club.` : "Removed." };
   });
 }
 

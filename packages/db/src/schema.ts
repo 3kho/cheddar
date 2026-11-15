@@ -185,6 +185,12 @@ export const oauthTokens = pgTable(
 
 // ---------- markets ----------
 
+/** The categories a wheel can be filed under. Super admins add and remove them; "Hack Club" is the fallback and can't be removed. */
+export const categories = pgTable("categories", {
+  name: text("name").primaryKey(),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
 export const proposals = pgTable(
   "proposals",
   {

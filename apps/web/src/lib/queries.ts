@@ -24,6 +24,7 @@ import {
   users,
   wedges,
   wheels,
+  categories,
 } from "@cheddar/db";
 import { getDb } from "./db";
 import { chanceOf } from "./format";
@@ -1055,4 +1056,21 @@ export async function watchLateBuys() {
     rows: { userId: string; userName: string | null; wheelTitle: string; wheelSlug: string; proposedAt: string | Date; trades: number; shares: number; minutesBefore: number }[];
   };
   return r.rows;
+}
+
+/** Every category a wheel can be filed under, "Hack Club" first. */
+export async function allCategories(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select({ n: categories.name }).from(categories).orderBy(sql`(${categories.name} = 'Hack Club') DESC`, categories.createdAt, categories.name);
+  return rows.map((r) => r.n);
+}
+
+/** Categories with how many wheels are in each (admin tab). */
+export async function categoryCounts(): Promise<{ name: string; wheels: number }[]> {
+  const db = await getDb();
+  const rows = await db
+    .select({ n: categories.name, c: sql<number>`(SELECT count(*) FROM wheels w WHERE w.category = ${categories.name})::int` })
+    .from(categories)
+    .orderBy(sql`(${categories.name} = 'Hack Club') DESC`, categories.createdAt, categories.name);
+  return rows.map((r) => ({ name: r.n, wheels: r.c }));
 }

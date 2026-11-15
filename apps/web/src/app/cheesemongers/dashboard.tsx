@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { audit } from "@cheddar/exchange";
 import { ActionButton, ReasonAction, ReviewButtons } from "@/components/ActionButton";
+import { CategoryForm } from "@/components/CategoryForm";
 import { FunderForm } from "@/components/FunderForm";
 import { LiquidityControl } from "@/components/LiquidityControl";
 import { AlertIcon, CheckIcon, CheeseIcon, ListPlusIcon, MouseIcon, PauseIcon, PencilIcon } from "@/components/Icons";
 import { Avatar, WheelIcon } from "@/components/Logo";
 import {
   pauseWheelAction,
+  removeCategoryAction,
   removeFunderAction,
   renameUserAction,
   resolveReportAction,
@@ -26,6 +28,7 @@ import {
   PAGE_SIZE,
   activeFunders,
   auditLogPage,
+  categoryCounts,
   dashboardCounts,
   moderationWheels,
   mouseStatus,
@@ -40,7 +43,7 @@ import {
 import { requireCheesemonger, requireSuperAdmin, type SessionUser } from "@/lib/session";
 
 const CHEESEMONGER_TABS = ["proposals", "outcomes", "settlements", "reports", "watch", "wheels"] as const;
-const ADMIN_TABS = ["users", "funders", "logs", "health"] as const;
+const ADMIN_TABS = ["users", "funders", "categories", "logs", "health"] as const;
 type Tab = (typeof CHEESEMONGER_TABS)[number] | (typeof ADMIN_TABS)[number];
 export type DashboardSP = { tab?: string; page?: string; q?: string; filter?: string; action?: string };
 type SP = DashboardSP;
@@ -65,6 +68,7 @@ export async function Dashboard({ area, searchParams }: { area: "cheesemongers" 
     wheels: { label: "Wheels", count: counts.paused || undefined },
     users: { label: "Users", count: counts.suspended || undefined },
     funders: { label: "Mouse funders", count: counts.funders },
+    categories: { label: "Categories" },
     logs: { label: "Logs" },
     health: { label: "Health" },
   };
@@ -76,7 +80,7 @@ export async function Dashboard({ area, searchParams }: { area: "cheesemongers" 
           <h1 className="text-2xl font-bold">{area === "admin" ? "Super admin" : "Cheesemongers"}</h1>
           <p className="mt-1 text-sm text-muted">
             {area === "admin"
-              ? "People, Mouse funders, the audit log and the ledger's health."
+              ? "People, Mouse funders, categories, the audit log and the ledger's health."
               : "Review wheels and new outcomes, ripen settlements, and look after live wheels."}
             {area !== "admin" && !env.allowSelfReview && " Someone else has to review anything you proposed."}
           </p>
@@ -124,6 +128,7 @@ export async function Dashboard({ area, searchParams }: { area: "cheesemongers" 
         {tab === "wheels" && <WheelsTab q={sp.q} page={page} />}
         {tab === "users" && <UsersTab me={me} q={sp.q} filter={sp.filter} page={page} />}
         {tab === "funders" && <FundersTab />}
+        {tab === "categories" && <CategoriesTab />}
         {tab === "logs" && <LogsTab action={sp.action} page={page} />}
         {tab === "health" && <HealthTab />}
       </div>
@@ -552,6 +557,48 @@ async function WatchTab() {
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+async function CategoriesTab() {
+  const cats = await categoryCounts();
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-line bg-surface p-4">
+        <CategoryForm />
+        <p className="mt-1 text-xs text-muted">
+          Categories show up in the propose form and the filter bar. Removing one moves its wheels to Hack Club.
+        </p>
+      </div>
+      <ul className="divide-y divide-line rounded-xl border border-line bg-surface text-sm">
+        {cats.map((c) => (
+          <li key={c.name} className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <span className="flex items-center gap-2.5">
+              <WheelIcon icon={null} category={c.name} size={28} />
+              <span className="font-medium">{c.name}</span>
+              <span className="text-xs text-muted">
+                {c.wheels} wheel{c.wheels === 1 ? "" : "s"}
+              </span>
+            </span>
+            {c.name === "Hack Club" ? (
+              <span className="text-xs text-muted">Fallback, can&apos;t be removed</span>
+            ) : (
+              <ActionButton
+                action={removeCategoryAction.bind(null, c.name)}
+                confirm={
+                  c.wheels
+                    ? `Remove "${c.name}"? Its ${c.wheels} wheel${c.wheels === 1 ? "" : "s"} will move to Hack Club.`
+                    : `Remove "${c.name}"?`
+                }
+                className="text-xs font-semibold text-no hover:underline"
+              >
+                Remove
+              </ActionButton>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

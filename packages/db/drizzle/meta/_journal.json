@@ -113,6 +113,13 @@
       "when": 1794688988771,
       "tag": "0015_tour",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794726411463,
+      "tag": "0016_categories",
+      "breakpoints": true
     }
   ]
 }

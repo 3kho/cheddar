@@ -1,7 +1,7 @@
 /**
  * Cheesemonger moderation. Every action is checked, applied and logged in one transaction.
  */
-import { and, asc, eq, ne, sql, users, wedges, wheels, type AnyDb, type Tx } from "@cheddar/db";
+import { and, asc, categories, eq, ne, proposals, sql, users, wedges, wheels, type AnyDb, type Tx } from "@cheddar/db";
 import { ExchangeError, runTx } from "./errors";
 import { cancelUserOrders } from "./exchange";
 import { logEvent } from "./log";
@@ -194,5 +194,48 @@ export async function resumeWheel(db: AnyDb, input: { wheelId: string; actorId: 
       targetId: w.id,
       details: { title: w.title, slug: w.slug, wasPausedFor: w.pauseReason },
     });
+  });
+}
+
+/** The category wheels fall back to when theirs is removed. It can't be removed itself. */
+export const DEFAULT_CATEGORY = "Hack Club";
+
+/** Super admins: add a category wheels can be filed under. */
+export async function addCategory(db: AnyDb, input: { name: string; actorId: string }) {
+  const name = requireText(input.name, "category", 40);
+  await runTx(db, async (tx) => {
+    await assertSuperAdmin(tx, input.actorId);
+    const [dupe] = await tx.select({ n: categories.name }).from(categories).where(sql`lower(${categories.name}) = lower(${name})`);
+    if (dupe) throw new ExchangeError("INVALID", `"${dupe.n}" already exists`);
+    await tx.insert(categories).values({ name });
+    await logEvent(tx, { actorId: input.actorId, action: "category.add", targetType: "category", targetId: name, details: { name } });
+  });
+}
+
+/**
+ * Super admins: remove a category. Wheels (and pending proposals) filed under it move to
+ * "Hack Club". Returns how many wheels moved.
+ */
+export async function removeCategory(db: AnyDb, input: { name: string; actorId: string }): Promise<{ moved: number }> {
+  return runTx(db, async (tx) => {
+    await assertSuperAdmin(tx, input.actorId);
+    if (input.name === DEFAULT_CATEGORY) throw new ExchangeError("INVALID", `"${DEFAULT_CATEGORY}" is the fallback category and can't be removed`);
+    const gone = await tx.delete(categories).where(eq(categories.name, input.name)).returning({ n: categories.name });
+    if (!gone.length) throw new ExchangeError("NOT_FOUND", "category not found");
+    await tx.insert(categories).values({ name: DEFAULT_CATEGORY }).onConflictDoNothing();
+    const moved = await tx.update(wheels).set({ category: DEFAULT_CATEGORY }).where(eq(wheels.category, input.name)).returning({ id: wheels.id });
+    const movedProposals = await tx
+      .update(proposals)
+      .set({ category: DEFAULT_CATEGORY })
+      .where(and(eq(proposals.category, input.name), eq(proposals.status, "pending")))
+      .returning({ id: proposals.id });
+    await logEvent(tx, {
+      actorId: input.actorId,
+      action: "category.remove",
+      targetType: "category",
+      targetId: input.name,
+      details: { name: input.name, wheelsMoved: moved.length, proposalsMoved: movedProposals.length, movedTo: DEFAULT_CATEGORY },
+    });
+    return { moved: moved.length };
   });
 }

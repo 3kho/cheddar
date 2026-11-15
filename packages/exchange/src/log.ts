@@ -28,13 +28,15 @@ export type AuditAction =
   | "wheel.pause"
   | "wheel.resume"
   | "wheel.liquidity"
+  | "category.add"
+  | "category.remove"
   | "churn.run";
 
 export interface AuditEvent {
   /** Null for system jobs. */
   actorId: string | null;
   action: AuditAction;
-  targetType?: "proposal" | "settlement" | "wheel" | "user" | "funder" | "outcome" | "report";
+  targetType?: "proposal" | "settlement" | "wheel" | "user" | "funder" | "outcome" | "report" | "category";
   targetId?: string;
   details?: Record<string, unknown>;
 }

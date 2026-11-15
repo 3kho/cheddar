@@ -4,7 +4,7 @@ import { WheelIcon } from "@/components/Logo";
 import { ProposeForm } from "@/components/ProposeForm";
 import { withdrawProposalAction } from "@/lib/actions";
 import { formatDate } from "@/lib/format";
-import { myProposals } from "@/lib/queries";
+import { allCategories, myProposals } from "@/lib/queries";
 import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 
 export default async function ProposePage() {
   const user = await requireUser("/propose");
-  const mine = await myProposals(user.id);
+  const [mine, categories] = await Promise.all([myProposals(user.id), allCategories()]);
   return (
     <div className="mx-auto max-w-[1100px]">
       <header className="mb-6">
@@ -29,7 +29,7 @@ export default async function ProposePage() {
           live for everyone to trade.
         </p>
       </header>
-      <ProposeForm>
+      <ProposeForm categories={categories}>
         <section>
           <h2 className="mb-2 text-sm font-semibold text-muted">Your proposals</h2>
           {mine.length === 0 ? (

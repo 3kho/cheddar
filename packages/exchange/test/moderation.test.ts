@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { asc, auditLog, createPgliteDb, eq, sql, users, type AnyDb } from "@cheddar/db";
+import { asc, auditLog, categories, wheels, createPgliteDb, eq, sql, users, type AnyDb } from "@cheddar/db";
 import {
   Exchange,
+  addCategory,
+  removeCategory,
   ExchangeError,
   addMouseFunder,
   approveProposal,
@@ -208,5 +210,22 @@ describe("Audit log", () => {
     }
     expect(await logs()).toHaveLength(1);
     void monger;
+  });
+});
+
+describe("Categories", () => {
+  it("super admins add and remove them; removing moves wheels to Hack Club", async () => {
+    const { monger, monger2, wheel } = await world();
+    expect(await code(addCategory(db, { name: "Sports", actorId: monger2.id }))).toBe("FORBIDDEN");
+    await addCategory(db, { name: "Sports", actorId: monger.id });
+    expect(await code(addCategory(db, { name: "sports", actorId: monger.id }))).toBe("INVALID");
+    await db.update(wheels).set({ category: "Sports" }).where(eq(wheels.id, wheel.id));
+    expect(await code(removeCategory(db, { name: "Sports", actorId: monger2.id }))).toBe("FORBIDDEN");
+    expect(await code(removeCategory(db, { name: "Hack Club", actorId: monger.id }))).toBe("INVALID");
+    expect(await removeCategory(db, { name: "Sports", actorId: monger.id })).toEqual({ moved: 1 });
+    const [w] = await db.select().from(wheels).where(eq(wheels.id, wheel.id));
+    expect(w!.category).toBe("Hack Club");
+    expect((await db.select().from(categories)).map((c) => c.name)).not.toContain("Sports");
+    expect(await code(removeCategory(db, { name: "Sports", actorId: monger.id }))).toBe("NOT_FOUND");
   });
 });
