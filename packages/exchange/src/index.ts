@@ -58,6 +58,7 @@ export {
   addCategory,
   cleanName,
   removeCategory,
+  setCategoryIcon,
   pauseWheel,
   renameUser,
   resumeWheel,

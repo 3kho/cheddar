@@ -14,7 +14,7 @@ export interface ProposalInput {
   resolutionCriteria: string;
   /** Optional hard stop for trading. Normally wheels stay open until a close request is approved. */
   closesAt?: Date | null;
-  /** "svg:<name>" (a built-in icon) or a small data:image/png|jpeg|webp;base64 URL. */
+  /** "img:<file>" (a picture from public/market-icons), "svg:<name>" or a small data:image/png|jpeg|webp;base64 URL. */
   icon?: string | null;
   /** Wedge labels. One label makes a binary Yes/No wheel. */
   outcomes: string[];
@@ -60,13 +60,14 @@ export function cleanCloseTime(closesAt: Date | null | undefined, now: Date): Da
 /** Uploaded icons are resized in the browser; anything bigger than this was not. */
 export const MAX_ICON_CHARS = 200_000;
 const SVG_ICON = /^svg:[a-z0-9-]{1,32}$/;
+const PICTURE_ICON = /^img:[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const IMAGE_ICON = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** Accepts a built-in icon name or a small raster data URL. SVG uploads are refused (they can carry script). */
 export function cleanIcon(icon: string | null | undefined): string | null {
   const v = (icon ?? "").trim();
   if (!v) return null;
-  if (SVG_ICON.test(v)) return v;
+  if (SVG_ICON.test(v) || PICTURE_ICON.test(v)) return v;
   if (v.length > MAX_ICON_CHARS) throw new ExchangeError("INVALID", "that image is too big; use a smaller one");
   if (IMAGE_ICON.test(v)) return v;
   throw new ExchangeError("INVALID", "the icon must be a PNG, JPEG or WebP image, or one of the built-in icons");

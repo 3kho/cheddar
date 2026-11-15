@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { listMarketIcons } from "@/lib/market-icons";
 import { ProposeForm } from "@/components/ProposeForm";
 import { formatDate } from "@/lib/format";
 import { allCategories, proposalById } from "@/lib/queries";
@@ -31,6 +32,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
       ) : (
         <ProposeForm
           categories={await allCategories()}
+          icons={listMarketIcons()}
           mode={{ kind: "proposal", id: p.id }}
           initial={{
             title: p.title,

@@ -1,4 +1,7 @@
+"use client";
+
 import logo from "@/assets/logo.png";
+import { useCategoryIcons } from "./CategoryIcons";
 import { BASE_ICONS, type BaseIconName } from "./Icons";
 
 /** The Cheddar slice. */
@@ -38,11 +41,18 @@ export function WheelIcon({
   icon,
   category,
   size = 40,
+  ignoreCategoryIcon = false,
 }: {
+  /** Show the built-in glyph even if a super admin picked an icon for the category. */
+  ignoreCategoryIcon?: boolean;
   icon?: string | null;
   category: string | null | undefined;
   size?: number;
 }) {
+  const categoryIcons = useCategoryIcons();
+  // A wheel without its own icon shows its category's icon, if a super admin set one.
+  const own = icon && (icon.startsWith("data:image/") || icon.startsWith("img:"));
+  if (!own && !baseIconName(icon) && !ignoreCategoryIcon && category && categoryIcons[category]) icon = categoryIcons[category];
   const radius = size >= 56 ? 12 : size >= 36 ? 8 : 6;
   if (icon?.startsWith("data:image/")) {
     return (
@@ -54,6 +64,19 @@ export function WheelIcon({
         height={size}
         className="shrink-0 bg-surface-2 object-cover"
         style={{ width: size, height: size, borderRadius: radius }}
+      />
+    );
+  }
+  if (icon?.startsWith("img:")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`/market-icons/${encodeURIComponent(icon.slice(4))}`}
+        alt=""
+        width={size}
+        height={size}
+        className="shrink-0 object-contain"
+        style={{ width: size, height: size }}
       />
     );
   }

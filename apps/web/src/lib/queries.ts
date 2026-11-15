@@ -1066,11 +1066,18 @@ export async function allCategories(): Promise<string[]> {
 }
 
 /** Categories with how many wheels are in each (admin tab). */
-export async function categoryCounts(): Promise<{ name: string; wheels: number }[]> {
+export async function categoryCounts(): Promise<{ name: string; wheels: number; icon: string | null }[]> {
   const db = await getDb();
   const rows = await db
-    .select({ n: categories.name, c: sql<number>`(SELECT count(*) FROM wheels w WHERE w.category = ${categories.name})::int` })
+    .select({ n: categories.name, icon: categories.icon, c: sql<number>`(SELECT count(*) FROM wheels w WHERE w.category = ${categories.name})::int` })
     .from(categories)
     .orderBy(sql`(${categories.name} = 'Hack Club') DESC`, categories.createdAt, categories.name);
-  return rows.map((r) => ({ name: r.n, wheels: r.c }));
+  return rows.map((r) => ({ name: r.n, wheels: r.c, icon: r.icon }));
+}
+
+/** Category name to the icon a super admin picked for it (categories without one are left out). */
+export async function categoryIcons(): Promise<Record<string, string>> {
+  const db = await getDb();
+  const rows = await db.select({ n: categories.name, icon: categories.icon }).from(categories).where(sql`${categories.icon} IS NOT NULL`);
+  return Object.fromEntries(rows.map((r) => [r.n, r.icon!]));
 }

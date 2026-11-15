@@ -188,6 +188,8 @@ export const oauthTokens = pgTable(
 /** The categories a wheel can be filed under. Super admins add and remove them; "Hack Club" is the fallback and can't be removed. */
 export const categories = pgTable("categories", {
   name: text("name").primaryKey(),
+  /** "img:<file>", "svg:<name>" or a small data:image URL. Null: the built-in glyph for the category. */
+  icon: text("icon"),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 

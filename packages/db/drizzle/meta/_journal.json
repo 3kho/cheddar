@@ -120,6 +120,13 @@
       "when": 1794726411463,
       "tag": "0016_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794732909539,
+      "tag": "0017_category_icons",
+      "breakpoints": true
     }
   ]
 }

@@ -18,6 +18,8 @@ const config: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "pg", "embedded-postgres"],
   turbopack: { root },
   poweredByHeader: false,
+  // Files read at runtime: the market icon list and the markdown pages.
+  outputFileTracingIncludes: { "/**": ["./public/market-icons/**/*", "./content/**/*"] },
   agentRules: false,
 };
 

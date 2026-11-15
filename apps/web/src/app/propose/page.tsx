@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ActionButton } from "@/components/ActionButton";
 import { WheelIcon } from "@/components/Logo";
+import { listMarketIcons } from "@/lib/market-icons";
 import { ProposeForm } from "@/components/ProposeForm";
 import { withdrawProposalAction } from "@/lib/actions";
 import { formatDate } from "@/lib/format";
@@ -29,7 +30,8 @@ export default async function ProposePage() {
           live for everyone to trade.
         </p>
       </header>
-      <ProposeForm categories={categories}>
+      <ProposeForm categories={categories}
+        icons={listMarketIcons()}>
         <section>
           <h2 className="mb-2 text-sm font-semibold text-muted">Your proposals</h2>
           {mine.length === 0 ? (

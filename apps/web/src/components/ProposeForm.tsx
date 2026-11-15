@@ -12,9 +12,8 @@ import {
 import { OTHER_LABEL, isOtherLabel } from "@/lib/format";
 import { safely } from "@/lib/safely";
 import { Notice } from "./ActionButton";
+import { IconPicker } from "./IconPicker";
 import {
-  BASE_ICONS,
-  BASE_ICON_NAMES,
   CalendarIcon,
   CheeseIcon,
   ImageIcon,
@@ -22,30 +21,10 @@ import {
   PlusIcon,
   UploadIcon,
   XIcon,
-  type BaseIconName,
 } from "./Icons";
-import { WheelIcon, categoryLook } from "./Logo";
+import { WheelIcon } from "./Logo";
 
 const MAX_OUTCOMES = 30;
-const ICON_PX = 128;
-const MAX_ICON_CHARS = 200_000;
-
-/** Crop an image to a centred square and shrink it to ICON_PX, as WebP (PNG where WebP can't be encoded). */
-async function imageToIcon(file: File): Promise<string> {
-  const bmp = await createImageBitmap(file);
-  const side = Math.min(bmp.width, bmp.height);
-  const canvas = document.createElement("canvas");
-  canvas.width = ICON_PX;
-  canvas.height = ICON_PX;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("no canvas");
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, ICON_PX, ICON_PX);
-  bmp.close();
-  const webp = canvas.toDataURL("image/webp", 0.86);
-  return webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/png");
-}
-
 /** What the form edits: a new proposal, a pending one (Cheesemongers), or a live wheel (Cheesemongers). */
 export type ProposeMode =
   | { kind: "propose" }
@@ -105,7 +84,10 @@ export function ProposeForm({
   mode = { kind: "propose" },
   initial,
   categories: CATEGORIES,
+  icons = [],
 }: {
+  /** Pictures offered in the icon picker (public/market-icons). */
+  icons?: { value: string; label: string; src: string }[];
   /** The categories super admins have set up. */
   categories: string[];
   children?: React.ReactNode;
@@ -127,7 +109,7 @@ export function ProposeForm({
   // Wheel mode: renames for the live outcomes. `outcomes` holds the new ones.
   const [labels, setLabels] = useState<Record<string, string>>(() => Object.fromEntries(existing.map((w) => [w.id, w.label])));
   const [outcomes, setOutcomes] = useState<string[]>(isWheel ? [] : startMulti ? initial!.outcomes : ["", ""]);
-  const [icon, setIcon] = useState<string>(initial?.icon ?? ""); // "", "svg:<name>" or a data URL
+  const [icon, setIcon] = useState<string>(initial?.icon ?? ""); // "", "img:<file>" or a data URL
   const [iconError, setIconError] = useState<string | null>(null);
   const [closes, setCloses] = useState<"request" | "date">(initial?.closesAt ? "date" : "request");
   const [preset, setPreset] = useState<Preset>(initial?.closesAt ? "custom" : "1w");
@@ -178,7 +160,6 @@ export function ProposeForm({
           : null;
 
   const canSubmit = title.trim().length > 0 && criteria.trim().length > 0 && !outcomeProblem && !closeProblem && !pending;
-  const tint = categoryLook(category).tint;
   const categories = !category || CATEGORIES.includes(category) ? CATEGORIES : [...CATEGORIES, category];
 
   const reset = () => {
@@ -192,20 +173,6 @@ export function ProposeForm({
     setPreset("1w");
     setCustom("");
     setAllowAdditions(false);
-  };
-
-  const onFile = async (file: File | undefined) => {
-    setIconError(null);
-    if (!file) return;
-    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return setIconError("Use a PNG, JPEG, WebP or GIF image.");
-    if (file.size > 8 * 1024 * 1024) return setIconError("That image is over 8 MB.");
-    try {
-      const url = await imageToIcon(file);
-      if (url.length > MAX_ICON_CHARS) return setIconError("That image is still too big after shrinking. Try a simpler one.");
-      setIcon(url);
-    } catch {
-      setIconError("Couldn't read that image.");
-    }
   };
 
   const setOutcome = (i: number, v: string) => setOutcomes((xs) => xs.map((x, j) => (j === i ? v : x)));
@@ -423,45 +390,13 @@ export function ProposeForm({
 
           <fieldset>
             <legend className="mb-2 text-sm font-semibold">Icon</legend>
-            <div className="flex flex-wrap gap-1.5">
-              <IconChoice selected={icon === ""} onClick={() => setIcon("")} label="Category icon">
-                <WheelIcon category={category} size={34} />
-              </IconChoice>
-              {BASE_ICON_NAMES.map((name) => {
-                const Glyph = BASE_ICONS[name as BaseIconName];
-                return (
-                  <IconChoice key={name} selected={icon === `svg:${name}`} onClick={() => setIcon(`svg:${name}`)} label={name}>
-                    <span className="grid h-[34px] w-[34px] place-items-center rounded-lg" style={{ color: tint }}>
-                      <Glyph size={20} strokeWidth={1.9} />
-                    </span>
-                  </IconChoice>
-                );
-              })}
-              <IconChoice selected={icon.startsWith("data:")} onClick={() => fileRef.current?.click()} label="Upload an image">
-                {icon.startsWith("data:") ? (
-                  <WheelIcon icon={icon} category={category} size={34} />
-                ) : (
-                  <span className="grid h-[34px] w-[34px] place-items-center rounded-lg text-muted">
-                    <UploadIcon size={18} />
-                  </span>
-                )}
-              </IconChoice>
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className="sr-only"
-              tabIndex={-1}
-              onChange={(e) => {
-                void onFile(e.target.files?.[0]);
-                e.target.value = "";
-              }}
+            <IconPicker
+              value={icon}
+              onChange={setIcon}
+              icons={icons}
+              defaultPreview={<WheelIcon category={category} size={34} />}
+              uploaded={(url) => <WheelIcon icon={url} category={category} size={34} />}
             />
-            <p className={`mt-1.5 flex items-center gap-1.5 text-xs ${iconError ? "text-no" : "text-muted"}`}>
-              <ImageIcon size={13} />
-              {iconError ?? "Pick an icon or upload a square-ish image. It's cropped and shrunk to 128px."}
-            </p>
           </fieldset>
         </div>
 
@@ -694,31 +629,6 @@ function Field({
       {children}
       {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
     </label>
-  );
-}
-
-function IconChoice({
-  selected,
-  onClick,
-  label,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      aria-label={label}
-      title={label}
-      className={`rounded-[10px] p-1 transition ${selected ? "bg-primary-soft ring-2 ring-primary" : "hover:bg-hover"}`}
-    >
-      {children}
-    </button>
   );
 }
 

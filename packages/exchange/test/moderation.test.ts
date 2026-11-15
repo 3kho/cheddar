@@ -5,6 +5,7 @@ import {
   Exchange,
   addCategory,
   removeCategory,
+  setCategoryIcon,
   ExchangeError,
   addMouseFunder,
   approveProposal,
@@ -227,5 +228,16 @@ describe("Categories", () => {
     expect(w!.category).toBe("Hack Club");
     expect((await db.select().from(categories)).map((c) => c.name)).not.toContain("Sports");
     expect(await code(removeCategory(db, { name: "Sports", actorId: monger.id }))).toBe("NOT_FOUND");
+  });
+
+  it("super admins set a category icon; bad ones are refused", async () => {
+    const { monger, monger2 } = await world();
+    expect(await code(setCategoryIcon(db, { name: "YSWS", icon: "img:ship.png", actorId: monger2.id }))).toBe("FORBIDDEN");
+    await setCategoryIcon(db, { name: "YSWS", icon: "img:ship.png", actorId: monger.id });
+    expect((await db.select().from(categories).where(eq(categories.name, "YSWS")))[0]!.icon).toBe("img:ship.png");
+    expect(await code(setCategoryIcon(db, { name: "YSWS", icon: "https://evil.example/x.png", actorId: monger.id }))).toBe("INVALID");
+    expect(await code(setCategoryIcon(db, { name: "Nope", icon: "img:ship.png", actorId: monger.id }))).toBe("NOT_FOUND");
+    await setCategoryIcon(db, { name: "YSWS", icon: "", actorId: monger.id });
+    expect((await db.select().from(categories).where(eq(categories.name, "YSWS")))[0]!.icon).toBeNull();
   });
 });

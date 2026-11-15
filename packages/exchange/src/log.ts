@@ -30,6 +30,7 @@ export type AuditAction =
   | "wheel.liquidity"
   | "category.add"
   | "category.remove"
+  | "category.icon"
   | "churn.run";
 
 export interface AuditEvent {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { listMarketIcons } from "@/lib/market-icons";
 import { ProposeForm } from "@/components/ProposeForm";
 import { allCategories, getWheel } from "@/lib/queries";
 import { requireCheesemonger } from "@/lib/session";
@@ -31,6 +32,7 @@ export default async function EditWheelPage({ params }: { params: Promise<{ slug
       ) : (
         <ProposeForm
           categories={await allCategories()}
+          icons={listMarketIcons()}
           mode={{ kind: "wheel", id: wheel.id, slug: wheel.slug, wedges: wheel.wedges.map((w) => ({ id: w.id, label: w.label })) }}
           initial={{
             title: wheel.title,

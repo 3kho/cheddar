@@ -2,6 +2,7 @@ import Link from "next/link";
 import { audit } from "@cheddar/exchange";
 import { ActionButton, ReasonAction, ReviewButtons } from "@/components/ActionButton";
 import { CategoryForm } from "@/components/CategoryForm";
+import { CategoryIconEditor } from "@/components/CategoryIconEditor";
 import { FunderForm } from "@/components/FunderForm";
 import { LiquidityControl } from "@/components/LiquidityControl";
 import { AlertIcon, CheckIcon, CheeseIcon, ListPlusIcon, MouseIcon, PauseIcon, PencilIcon } from "@/components/Icons";
@@ -22,6 +23,7 @@ import {
   unsuspendUserAction,
 } from "@/lib/actions";
 import { getDb } from "@/lib/db";
+import { listMarketIcons } from "@/lib/market-icons";
 import { env } from "@/lib/env";
 import { formatDate, formatLatta, timeAgo } from "@/lib/format";
 import {
@@ -563,6 +565,7 @@ async function WatchTab() {
 
 async function CategoriesTab() {
   const cats = await categoryCounts();
+  const icons = listMarketIcons();
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-line bg-surface p-4">
@@ -573,7 +576,7 @@ async function CategoriesTab() {
       </div>
       <ul className="divide-y divide-line rounded-xl border border-line bg-surface text-sm">
         {cats.map((c) => (
-          <li key={c.name} className="flex items-center justify-between gap-3 px-4 py-2.5">
+          <li key={c.name} className="flex flex-wrap items-start justify-between gap-3 px-4 py-2.5">
             <span className="flex items-center gap-2.5">
               <WheelIcon icon={null} category={c.name} size={28} />
               <span className="font-medium">{c.name}</span>
@@ -581,21 +584,26 @@ async function CategoriesTab() {
                 {c.wheels} wheel{c.wheels === 1 ? "" : "s"}
               </span>
             </span>
-            {c.name === "Hack Club" ? (
-              <span className="text-xs text-muted">Fallback, can&apos;t be removed</span>
-            ) : (
-              <ActionButton
-                action={removeCategoryAction.bind(null, c.name)}
-                confirm={
-                  c.wheels
-                    ? `Remove "${c.name}"? Its ${c.wheels} wheel${c.wheels === 1 ? "" : "s"} will move to Hack Club.`
-                    : `Remove "${c.name}"?`
-                }
-                className="text-xs font-semibold text-no hover:underline"
-              >
-                Remove
-              </ActionButton>
-            )}
+            <span className="flex flex-col items-end gap-1.5">
+              <span className="flex items-center gap-4">
+                <CategoryIconEditor name={c.name} current={c.icon} icons={icons} />
+                {c.name === "Hack Club" ? (
+                  <span className="text-xs text-muted">Fallback, can&apos;t be removed</span>
+                ) : (
+                  <ActionButton
+                    action={removeCategoryAction.bind(null, c.name)}
+                    confirm={
+                      c.wheels
+                        ? `Remove "${c.name}"? Its ${c.wheels} wheel${c.wheels === 1 ? "" : "s"} will move to Hack Club.`
+                        : `Remove "${c.name}"?`
+                    }
+                    className="text-xs font-semibold text-no hover:underline"
+                  >
+                    Remove
+                  </ActionButton>
+                )}
+              </span>
+            </span>
           </li>
         ))}
       </ul>

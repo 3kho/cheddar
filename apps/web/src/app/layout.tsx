@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import { CategoryIconsProvider } from "@/components/CategoryIcons";
 import { CheeseIcon, MouseIcon } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { Nav } from "@/components/Nav";
@@ -9,6 +10,7 @@ import { themeScript } from "@/components/ThemeToggle";
 import { after } from "next/server";
 import { hackatimeStatus, syncNow } from "@/lib/accounts";
 import { env } from "@/lib/env";
+import { categoryIcons } from "@/lib/queries";
 import { currentUser } from "@/lib/session";
 import "./globals.css";
 
@@ -36,7 +38,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await currentUser();
+  const [user, catIcons] = await Promise.all([currentUser(), categoryIcons()]);
   // The scheduled sweep only runs daily on Vercel's free plan, so top people up whenever they show
   // up (at most once every few minutes, see SYNC_COOLDOWN_MS), after the page has been sent.
   if (user && (user.slackId || user.hackatimeUserId)) {
@@ -56,6 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="flex min-h-screen flex-col font-sans">
+        <CategoryIconsProvider icons={catIcons}>
         <Nav user={user} />
         {user?.isSuspended && (
           <div className="border-b border-line bg-no-soft">
@@ -164,6 +167,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </nav>
           </div>
         </footer>
+        </CategoryIconsProvider>
         <Analytics />
       </body>
     </html>

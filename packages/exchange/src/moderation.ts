@@ -5,6 +5,7 @@ import { and, asc, categories, eq, ne, proposals, sql, users, wedges, wheels, ty
 import { ExchangeError, runTx } from "./errors";
 import { cancelUserOrders } from "./exchange";
 import { logEvent } from "./log";
+import { cleanIcon } from "./proposals";
 import { requireText } from "./review";
 
 async function assertCheesemonger(tx: Tx, actorId: string) {
@@ -237,5 +238,23 @@ export async function removeCategory(db: AnyDb, input: { name: string; actorId: 
       details: { name: input.name, wheelsMoved: moved.length, proposalsMoved: movedProposals.length, movedTo: DEFAULT_CATEGORY },
     });
     return { moved: moved.length };
+  });
+}
+
+/** Super admins: set (or clear, with an empty icon) the icon wheels in a category show when they have none of their own. */
+export async function setCategoryIcon(db: AnyDb, input: { name: string; icon: string | null; actorId: string }) {
+  const icon = cleanIcon(input.icon);
+  await runTx(db, async (tx) => {
+    await assertSuperAdmin(tx, input.actorId);
+    const done = await tx.update(categories).set({ icon }).where(eq(categories.name, input.name)).returning({ n: categories.name });
+    if (!done.length) throw new ExchangeError("NOT_FOUND", "category not found");
+    await logEvent(tx, {
+      actorId: input.actorId,
+      action: "category.icon",
+      targetType: "category",
+      targetId: input.name,
+      // Uploaded pictures are big; the log only needs to know it changed.
+      details: { name: input.name, icon: icon?.startsWith("data:") ? "uploaded image" : icon },
+    });
   });
 }

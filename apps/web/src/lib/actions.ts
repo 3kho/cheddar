@@ -6,6 +6,7 @@ import {
   CHURN_NOT_FOUND,
   addCategory,
   removeCategory,
+  setCategoryIcon,
   CHURN_PRIVATE,
   ExchangeError,
   RATES,
@@ -534,6 +535,15 @@ export async function addCategoryAction(name: string): Promise<ActionResult> {
     await addCategory(await getDb(), { name, actorId: u.id });
     revalidatePath("/", "layout");
     return { ok: true, message: "Category added." };
+  });
+}
+
+export async function setCategoryIconAction(name: string, icon: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await setCategoryIcon(await getDb(), { name, icon, actorId: u.id });
+    revalidatePath("/", "layout");
+    return { ok: true, message: icon ? "Icon updated." : "Back to the default icon." };
   });
 }
 
