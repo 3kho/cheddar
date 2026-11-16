@@ -4,6 +4,7 @@ import { asc, auditLog, categories, wheels, createPgliteDb, eq, sql, users, type
 import {
   Exchange,
   addCategory,
+  grantLatta,
   removeCategory,
   setCategoryIcon,
   ExchangeError,
@@ -239,5 +240,20 @@ describe("Categories", () => {
     expect(await code(setCategoryIcon(db, { name: "Nope", icon: "img:ship.png", actorId: monger.id }))).toBe("NOT_FOUND");
     await setCategoryIcon(db, { name: "YSWS", icon: "", actorId: monger.id });
     expect((await db.select().from(categories).where(eq(categories.name, "YSWS")))[0]!.icon).toBeNull();
+  });
+});
+
+describe("Grants", () => {
+  it("super admins grant Latta from the house, logged and audited", async () => {
+    const { monger, monger2, alice } = await world();
+    const before = (await balances(db, alice.id)).available;
+    expect(await code(grantLatta(db, { recipientId: alice.id, actorId: monger2.id, ticks: 500, reason: "bug bounty" }))).toBe("FORBIDDEN");
+    expect(await code(grantLatta(db, { recipientId: alice.id, actorId: monger.id, ticks: 0, reason: "x" }))).toBe("INVALID");
+    expect(await code(grantLatta(db, { recipientId: alice.id, actorId: monger.id, ticks: 500, reason: " " }))).toBe("INVALID");
+    await grantLatta(db, { recipientId: alice.id, actorId: monger.id, ticks: 500, reason: "bug bounty" });
+    expect((await balances(db, alice.id)).available).toBe(before + 500);
+    const log = await db.select().from(auditLog).where(eq(auditLog.action, "grant.lc"));
+    expect(log).toHaveLength(1);
+    // the afterEach hook runs the full audit, which now includes the grant checks
   });
 });

@@ -101,6 +101,20 @@ export async function audit(db: AnyDb): Promise<string[]> {
              (SELECT SUM(referrer_ticks + referee_ticks) AS paid FROM referrals WHERE status = 'paid') r
         WHERE a.kind = 'referral_issuance' AND -a.balance <> COALESCE(r.paid, 0)`,
   );
+  // Granted Latta is the last place new Latta comes from, and every tick is on a grants row.
+  await check(
+    "grant account touched by a non-grant entry",
+    sql`SELECT e.id, e.kind FROM ledger_lines l
+        JOIN journal_entries e ON e.id = l.entry_id
+        JOIN accounts a ON a.id = l.account_id
+        WHERE a.kind = 'grant_issuance' AND e.kind <> 'grant'`,
+  );
+  await check(
+    "issued grant Latta != granted",
+    sql`SELECT (-a.balance)::text AS issued, COALESCE(g.total, 0)::text AS granted
+        FROM accounts a, (SELECT SUM(ticks) AS total FROM grants) g
+        WHERE a.kind = 'grant_issuance' AND -a.balance <> COALESCE(g.total, 0)`,
+  );
   // House backing only moves through house_backing / house_repay, and is never "owed" to anyone.
   await check(
     "house account touched by a non-house entry",

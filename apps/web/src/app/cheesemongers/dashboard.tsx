@@ -4,6 +4,7 @@ import { ActionButton, ReasonAction, ReviewButtons } from "@/components/ActionBu
 import { CategoryForm } from "@/components/CategoryForm";
 import { CategoryIconEditor } from "@/components/CategoryIconEditor";
 import { FunderForm } from "@/components/FunderForm";
+import { GrantForm } from "@/components/GrantForm";
 import { LiquidityControl } from "@/components/LiquidityControl";
 import { AlertIcon, CheckIcon, CheeseIcon, ListPlusIcon, MouseIcon, PauseIcon, PencilIcon } from "@/components/Icons";
 import { Avatar, WheelIcon } from "@/components/Logo";
@@ -431,6 +432,7 @@ async function UsersTab({ me, q, filter, page }: { me: SessionUser; q?: string; 
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                {!u.isBot && u.hcaSub && <GrantForm userId={u.id} name={u.name ?? "them"} />}
                 {!u.isBot && <ReasonAction action={renameUserAction.bind(null, u.id)} label="Rename" placeholder="New name" />}
                 {u.id !== me.id &&
                   (u.suspendedAt ? (

@@ -58,6 +58,8 @@ export const accountKindEnum = pgEnum("account_kind", [
   "house_issuance",
   /** Where referral rewards come from. Goes negative, like churn_issuance. */
   "referral_issuance",
+  /** Where Latta granted by super admins comes from. Goes negative, like churn_issuance. */
+  "grant_issuance",
 ]);
 export const journalKindEnum = pgEnum("journal_kind", [
   "churn",
@@ -75,6 +77,8 @@ export const journalKindEnum = pgEnum("journal_kind", [
   "conversion",
   /** A referral reward paid to the person who invited someone and to the person they invited. */
   "referral",
+  /** Latta a super admin granted to someone from the house. */
+  "grant",
 ]);
 export const wheelStatusEnum = pgEnum("wheel_status", ["open", "closed", "ripening", "resolved", "moldy"]);
 export const wedgeStatusEnum = pgEnum("wedge_status", [
@@ -373,11 +377,12 @@ export const accounts = pgTable(
             WHEN 'churn_issuance' THEN ${t.userId} IS NULL AND ${t.wedgeId} IS NULL
             WHEN 'house_issuance' THEN ${t.userId} IS NULL AND ${t.wedgeId} IS NULL
             WHEN 'referral_issuance' THEN ${t.userId} IS NULL AND ${t.wedgeId} IS NULL
+            WHEN 'grant_issuance' THEN ${t.userId} IS NULL AND ${t.wedgeId} IS NULL
           END`,
     ),
     // Only the issuance accounts may go negative; this is the double-spend backstop.
     // (Compared as text so the migration that adds 'house_issuance' can create it in one transaction.)
-    check("accounts_non_negative", sql`${t.kind}::text IN ('churn_issuance', 'house_issuance', 'referral_issuance') OR ${t.balance} >= 0`),
+    check("accounts_non_negative", sql`${t.kind}::text IN ('churn_issuance', 'house_issuance', 'referral_issuance', 'grant_issuance') OR ${t.balance} >= 0`),
   ],
 );
 
@@ -559,6 +564,26 @@ export const auditLog = pgTable(
     index("audit_log_action_idx").on(t.action, t.at),
     index("audit_log_target_idx").on(t.targetType, t.targetId),
   ],
+);
+
+// ---------- grants ----------
+
+/** Latta a super admin gave someone from the house. Every tick in grant_issuance is on a row here (see audit). */
+export const grants = pgTable(
+  "grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => users.id),
+    grantedById: uuid("granted_by_id")
+      .notNull()
+      .references(() => users.id),
+    ticks: money("ticks").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("grants_recipient_idx").on(t.recipientId, t.createdAt), check("grants_positive", sql`${t.ticks} > 0`)],
 );
 
 // ---------- referrals ----------

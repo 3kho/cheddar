@@ -5,6 +5,7 @@ import { after } from "next/server";
 import {
   CHURN_NOT_FOUND,
   addCategory,
+  grantLatta,
   removeCategory,
   setCategoryIcon,
   CHURN_PRIVATE,
@@ -524,6 +525,21 @@ export async function removeFunderAction(slackId: string): Promise<ActionResult>
     await removeMouseFunder(await getDb(), { slackId, removedById: u.id });
     revalidatePath("/admin");
     return { ok: true, message: "Removed. Their future Churn goes to them." };
+  });
+}
+
+// ---------- grants ----------
+
+/** Super admin: give someone Latta from the house. `amount` is in Latta (up to 2 decimals). */
+export async function grantLattaAction(userId: string, amount: string, reason: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    const text = amount.trim().replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(text)) return { ok: false, error: "Enter an amount like 50 or 12.5." };
+    const ticks = Math.round(Number(text) * 100);
+    await grantLatta(await getDb(), { recipientId: userId, actorId: u.id, ticks, reason });
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Granted ${text} Lc.` };
   });
 }
 

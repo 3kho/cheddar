@@ -70,6 +70,7 @@ export {
 export { MAX_LIQUIDITY, MOUSE_LEVELS, mousePrices, mouseWheelIds, requoteWheel, setWheelLiquidity } from "./mouse";
 export { convertNo, mergePairs, mergeYesSet, type ConversionResult } from "./link";
 export { houseOutstanding } from "./house";
+export { MAX_GRANT_TICKS, grantLatta } from "./grants";
 export { addOutcome, requestOutcome, reviewOutcomeRequest, updateWheel, type WheelEdit } from "./outcomes";
 export {
   DEFAULT_REFERRAL,

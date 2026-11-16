@@ -28,6 +28,7 @@ export type AuditAction =
   | "wheel.pause"
   | "wheel.resume"
   | "wheel.liquidity"
+  | "grant.lc"
   | "category.add"
   | "category.remove"
   | "category.icon"
