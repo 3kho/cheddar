@@ -8,6 +8,7 @@ import { GrantForm } from "@/components/GrantForm";
 import { LiquidityControl } from "@/components/LiquidityControl";
 import { AlertIcon, CheckIcon, CheeseIcon, ListPlusIcon, MouseIcon, PauseIcon, PencilIcon } from "@/components/Icons";
 import { Avatar, WheelIcon } from "@/components/Logo";
+import { SlackAnnounce } from "@/components/SlackAnnounce";
 import {
   pauseWheelAction,
   removeCategoryAction,
@@ -46,7 +47,7 @@ import {
 import { requireCheesemonger, requireSuperAdmin, type SessionUser } from "@/lib/session";
 
 const CHEESEMONGER_TABS = ["proposals", "outcomes", "settlements", "reports", "watch", "wheels"] as const;
-const ADMIN_TABS = ["users", "funders", "categories", "logs", "health"] as const;
+const ADMIN_TABS = ["users", "funders", "categories", "logs", "health", "notifications"] as const;
 type Tab = (typeof CHEESEMONGER_TABS)[number] | (typeof ADMIN_TABS)[number];
 export type DashboardSP = { tab?: string; page?: string; q?: string; filter?: string; action?: string };
 type SP = DashboardSP;
@@ -74,6 +75,7 @@ export async function Dashboard({ area, searchParams }: { area: "cheesemongers" 
     categories: { label: "Categories" },
     logs: { label: "Logs" },
     health: { label: "Health" },
+    notifications: { label: "Slack" },
   };
 
   return (
@@ -134,6 +136,7 @@ export async function Dashboard({ area, searchParams }: { area: "cheesemongers" 
         {tab === "categories" && <CategoriesTab />}
         {tab === "logs" && <LogsTab action={sp.action} page={page} />}
         {tab === "health" && <HealthTab />}
+        {tab === "notifications" && <SlackAnnounce />}
       </div>
     </div>
   );

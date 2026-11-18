@@ -88,3 +88,10 @@ export {
 export { RATES, humanWait, takeRate, type RateRule } from "./rate";
 export { resolveReport, submitReport } from "./reports";
 export * as lmsr from "./lmsr";
+export {
+  sendSlackMessage,
+  sendSlackText,
+  type SlackMessage,
+  type SlackBlock,
+  slackUserIds,
+} from "./slack";

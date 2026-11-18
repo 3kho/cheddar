@@ -46,9 +46,13 @@ import {
   undoTrade,
   unsuspendUser,
   withdrawProposal,
+  sendSlackMessage,
+  slackUserIds,
+  type SlackMessage,
+  type SlackBlock,
   type SettlementOutcome,
 } from "@cheddar/exchange";
-import { and, eq, ne, sql, users } from "@cheddar/db";
+import { and, eq, ne, sql, users, proposals, outcomeRequests, settlements, type AnyDb, type Tx } from "@cheddar/db";
 import { hackatimeToken, syncNow } from "./accounts";
 import { getDb, getExchange, getHackatime } from "./db";
 import { env } from "./env";
@@ -72,6 +76,41 @@ async function attempt(fn: () => Promise<ActionResult>): Promise<ActionResult> {
     console.error(e);
     return fail("Something went wrong. Please try again.");
   }
+}
+
+/** Slack token for DMing users. Missing = notifications silently skipped. */
+const slackToken = process.env.SLACK_BOT_TOKEN;
+
+/**
+ * DM a user on Slack. Fire-and-forget: failures are logged but never break the action.
+ * `userId` is a Cheddar user id (we look up their Slack id from the DB).
+ */
+async function notifySlackUser(
+  db: AnyDb | Tx,
+  userId: string,
+  message: Omit<SlackMessage, "channel">,
+) {
+  if (!slackToken) return;
+  try {
+    const [row] = await db
+      .select({ slackId: users.slackId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!row?.slackId) return;
+    await sendSlackMessage(slackToken, { channel: row.slackId, ...message });
+  } catch (e) {
+    console.error("Slack notify failed:", e);
+  }
+}
+
+/** Notify several users the same message. */
+async function notifySlackUsers(
+  db: AnyDb | Tx,
+  userIds: string[],
+  message: Omit<SlackMessage, "channel">,
+) {
+  await Promise.all(userIds.map((id) => notifySlackUser(db, id, message)));
 }
 
 /** After a trade: if this person was invited and has now traded enough, pay the referral reward. */
@@ -339,15 +378,49 @@ export async function reviewOutcomeAction(
 ): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
+    const db = await getDb();
+    const [request] = await db
+      .select({ proposerId: outcomeRequests.proposerId, label: outcomeRequests.label, wheelId: outcomeRequests.wheelId })
+      .from(outcomeRequests)
+      .where(eq(outcomeRequests.id, requestId))
+      .limit(1);
     const chance = extra.startChance != null && Number.isFinite(extra.startChance) ? extra.startChance / 100 : undefined;
     const r = await reviewOutcomeRequest(
-      await getDb(),
+      db,
       { requestId, reviewerId: u.id, approve, note, label: extra.label, startChance: chance },
       reviewOpts(),
     );
-    if (r.approved) after(() => requote(r.wheel.id));
+    if (r.approved) {
+      await notifySlackUser(db, request!.proposerId, {
+        text: `Your outcome suggestion “${request!.label}” was approved and added to the wheel.`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Outcome approved*\nYour suggestion “${request!.label}” was approved and added to the wheel.`,
+            },
+          },
+        ],
+      });
+      after(() => requote(r.wheel.id));
+      revalidatePath("/", "layout");
+      return { ok: true, message: `Added “${r.wedge.label}” to ${r.wheel.title}.` };
+    }
+    await notifySlackUser(db, request!.proposerId, {
+      text: `Your outcome suggestion “${request!.label}” was rejected.`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Outcome rejected*\nYour suggestion “${request!.label}” was rejected by a Cheesemonger.${note ? `\nNote: ${note}` : ""}`,
+          },
+        },
+      ],
+    });
     revalidatePath("/", "layout");
-    return { ok: true, message: r.approved ? `Added “${r.wedge.label}” to ${r.wheel.title}.` : "Suggestion rejected." };
+    return { ok: true, message: "Suggestion rejected." };
   });
 }
 
@@ -369,14 +442,43 @@ export async function reviewProposalAction(
   return attempt(async () => {
     const u = await signedIn();
     const db = await getDb();
+    const [proposal] = await db
+      .select({ proposerId: proposals.proposerId })
+      .from(proposals)
+      .where(eq(proposals.id, proposalId))
+      .limit(1);
     if (approve) {
       const liquidity = Number(extra.liquidity ?? 0);
       const { wheel } = await approveProposal(db, { proposalId, reviewerId: u.id, note, liquidity }, reviewOpts());
       if (liquidity > 0) await requote(wheel.id);
+      await notifySlackUser(db, proposal!.proposerId, {
+        text: `Your proposal “${wheel.title}” was approved and is now live.`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Proposal approved*\nYour proposal “${wheel.title}” was approved and is now live at /wheel/${wheel.slug}.`,
+            },
+          },
+        ],
+      });
       revalidatePath("/", "layout");
       return { ok: true, message: `Approved: /wheel/${wheel.slug}` };
     }
     await rejectProposal(db, { proposalId, reviewerId: u.id, note }, reviewOpts());
+    await notifySlackUser(db, proposal!.proposerId, {
+      text: `Your proposal “${proposal?.proposerId ? "" : ""}” was rejected.`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Proposal rejected*\nYour proposal was rejected by a Cheesemonger.${note ? `\nNote: ${note}` : ""}`,
+          },
+        },
+      ],
+    });
     revalidatePath("/cheesemongers");
     return { ok: true, message: "Proposal rejected." };
   });
@@ -484,14 +586,43 @@ export async function reviewSettlementAction(
     const u = await signedIn();
     const db = await getDb();
     const proof = extra.proof ?? "";
+    const [settlement] = await db
+      .select({ proposerId: settlements.proposerId, wheelId: settlements.wheelId, outcome: settlements.outcome })
+      .from(settlements)
+      .where(eq(settlements.id, settlementId))
+      .limit(1);
     if (approve) {
       if (!proof.trim()) return fail("Add the proof people will see on the wheel before approving.");
       const report = await approveSettlement(db, { settlementId, reviewerId: u.id, note, proof }, reviewOpts());
       revalidatePath("/", "layout");
       const paid = report.reduce((s, r) => s + r.paidTicks, 0);
+      await notifySlackUser(db, settlement!.proposerId, {
+        text: `Your settlement request was approved — paid out ${formatLatta(paid)}.`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Settlement approved*\nYour settlement request was approved — paid out ${formatLatta(paid)}.\n${proof ? `*Proof:* ${proof}` : ""}`,
+            },
+          },
+        ],
+      });
       return { ok: true, message: `Ripened! Paid out ${formatLatta(paid)}.` };
     }
     await rejectSettlement(db, { settlementId, reviewerId: u.id, note }, reviewOpts());
+    await notifySlackUser(db, settlement!.proposerId, {
+      text: `Your settlement request was rejected.`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Settlement rejected*\nYour settlement request was rejected by a Cheesemonger.${note ? `\nNote: ${note}` : ""}`,
+          },
+        },
+      ],
+    });
     after(() => requoteAll()); // trading reopened: The Mouse quotes again
     revalidatePath("/", "layout");
     return { ok: true, message: "Settlement rejected; trading reopened." };
@@ -537,10 +668,23 @@ export async function removeFunderAction(slackId: string): Promise<ActionResult>
 export async function grantLattaAction(userId: string, amount: string, reason: string): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
+    const db = await getDb();
     const text = amount.trim().replace(/,/g, "");
     if (!/^\d+(\.\d{1,2})?$/.test(text)) return { ok: false, error: "Enter an amount like 50 or 12.5." };
     const ticks = Math.round(Number(text) * 100);
-    await grantLatta(await getDb(), { recipientId: userId, actorId: u.id, ticks, reason });
+    await grantLatta(db, { recipientId: userId, actorId: u.id, ticks, reason });
+    await notifySlackUser(db, userId, {
+      text: `You were granted ${text} Lc: ${reason}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Latta granted*\nYou were granted *${text} Lc*.\nReason: ${reason}`,
+          },
+        },
+      ],
+    });
     revalidatePath("/", "layout");
     return { ok: true, message: `Granted ${text} Lc.` };
   });
@@ -580,7 +724,20 @@ export async function removeCategoryAction(name: string): Promise<ActionResult> 
 export async function suspendUserAction(userId: string, reason: string): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
-    const r = await suspendUser(await getDb(), { userId, actorId: u.id, reason });
+    const db = await getDb();
+    const r = await suspendUser(db, { userId, actorId: u.id, reason });
+    await notifySlackUser(db, userId, {
+      text: `Your account has been suspended: ${reason}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Account suspended*\nYour Cheddar account has been suspended.\nReason: ${reason}`,
+          },
+        },
+      ],
+    });
     revalidatePath("/", "layout");
     return { ok: true, message: `Suspended. ${r.cancelledOrders} open order(s) cancelled.` };
   });
@@ -589,7 +746,20 @@ export async function suspendUserAction(userId: string, reason: string): Promise
 export async function unsuspendUserAction(userId: string, note: string): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
-    await unsuspendUser(await getDb(), { userId, actorId: u.id, note });
+    const db = await getDb();
+    await unsuspendUser(db, { userId, actorId: u.id, note });
+    await notifySlackUser(db, userId, {
+      text: `Your Cheddar account has been unsuspended. You can trade again.${note ? `\nNote: ${note}` : ""}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Account unsuspended*\nYour Cheddar account has been unsuspended. You can trade again.${note ? `\nNote: ${note}` : ""}`,
+          },
+        },
+      ],
+    });
     revalidatePath("/", "layout");
     return { ok: true, message: "Unsuspended." };
   });
@@ -598,7 +768,20 @@ export async function unsuspendUserAction(userId: string, note: string): Promise
 export async function setCheesemongerAction(userId: string, value: boolean): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
-    await setCheesemonger(await getDb(), { userId, actorId: u.id, value });
+    const db = await getDb();
+    await setCheesemonger(db, { userId, actorId: u.id, value });
+    await notifySlackUser(db, userId, {
+      text: value ? "You are now a Cheesemonger!" : "You are no longer a Cheesemonger.",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: value ? "*You are now a Cheesemonger!*\nYou can review proposals, outcomes, settlements, and moderate wheels." : "*You are no longer a Cheesemonger.*",
+          },
+        },
+      ],
+    });
     revalidatePath("/", "layout");
     return { ok: true, message: value ? "Now a Cheesemonger." : "No longer a Cheesemonger." };
   });
@@ -607,7 +790,20 @@ export async function setCheesemongerAction(userId: string, value: boolean): Pro
 export async function setSuperAdminAction(userId: string, value: boolean): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
-    await setSuperAdmin(await getDb(), { userId, actorId: u.id, value });
+    const db = await getDb();
+    await setSuperAdmin(db, { userId, actorId: u.id, value });
+    await notifySlackUser(db, userId, {
+      text: value ? "You are now a super admin!" : "You are no longer a super admin.",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: value ? "*You are now a super admin!*\nYou can manage users, Mouse funders, logs, and health." : "*You are no longer a super admin.*",
+          },
+        },
+      ],
+    });
     revalidatePath("/", "layout");
     return { ok: true, message: value ? "Now a super admin (and a Cheesemonger)." : "No longer a super admin." };
   });
@@ -651,9 +847,78 @@ export async function haltWedgeAction(wedgeId: string, halt: boolean, reason: st
 export async function undoTradeAction(tradeId: number): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn();
-    await undoTrade(await getDb(), { actorId: u.id, tradeId });
+    const db = await getDb();
+    const r = await undoTrade(db, { actorId: u.id, tradeId });
+    await notifySlackUsers(db, r.users, {
+      text: "A trade you were part of was reversed by a Cheesemonger. Your cash and shares are back to what they were.",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Trade reversed*\nA Cheesemonger undid a trade you were part of. Your cash and shares are back to what they were.`,
+          },
+        },
+      ],
+    });
     revalidatePath("/", "layout");
     return { ok: true, message: "Trade reversed. Positions and cash are back to what they were." };
+  });
+}
+
+/** Admin: send a Block Kit announcement as a DM to all users (or a filtered subset). */
+export async function sendSlackAnnouncement(
+  blocksJson: string,
+  filter: "all" | "cheesemongers" | "super-admins" = "all",
+): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    if (!u.isSuperAdmin) return fail("Only super admins can send announcements.");
+    if (!slackToken) return fail("SLACK_BOT_TOKEN is not configured on the server.");
+
+    let blocks: SlackBlock[];
+    try {
+      blocks = JSON.parse(blocksJson);
+      if (!Array.isArray(blocks)) throw new Error("blocks must be a JSON array");
+    } catch (e) {
+      return fail("Invalid Block Kit JSON. Paste a valid blocks array.");
+    }
+
+    const db = await getDb();
+    const conds = [sql`${users.slackId} IS NOT NULL`, eq(users.isBot, false)];
+    if (filter === "cheesemongers") conds.push(eq(users.isCheesemonger, true));
+    if (filter === "super-admins") conds.push(eq(users.isSuperAdmin, true));
+
+    const rows = await db
+      .select({ id: users.id, slackId: users.slackId, name: users.name })
+      .from(users)
+      .where(and(...conds));
+
+    const text = blocks
+      .map((b) => {
+        if (b.type === "section" && b.text && typeof b.text === "object" && "text" in b.text) {
+          return String((b.text as { text?: string }).text);
+        }
+        return "";
+      })
+      .join("\n")
+      .slice(0, 2000) || "Cheddar announcement";
+
+    await Promise.all(
+      rows.map((row) =>
+        sendSlackMessage(slackToken, {
+          channel: row.slackId!,
+          text,
+          blocks,
+        }),
+      ),
+    );
+
+    revalidatePath("/", "layout");
+    return {
+      ok: true,
+      message: `Sent announcement to ${rows.length} user${rows.length === 1 ? "" : "s"}.`,
+    };
   });
 }
 

@@ -1,0 +1,35 @@
+{
+  "display_information": {
+    "name": "Cheddar",
+    "description": "Play-money prediction market notifications for Cheddar",
+    "background_color": "#2F4F4F"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Cheddar",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://your-app.vercel.app/api/auth/slack/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "im:write",
+        "im:read",
+        "users:read"
+      ]
+    }
+  },
+  "settings": {
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://your-app.vercel.app/api/slack/interactive"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
