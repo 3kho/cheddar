@@ -611,7 +611,7 @@ export async function wheelActivity(wedgeIds: string[], limit = 30): Promise<Act
     JOIN users u ON u.id = l.user_id
     LEFT JOIN trade_legs ml ON ml.trade_id = t.id AND ml.order_id = t.maker_order_id
     LEFT JOIN users mu ON mu.id = ml.user_id
-    WHERE t.wedge_id IN (${idList(wedgeIds)})
+    WHERE t.wedge_id IN (${idList(wedgeIds)}) AND t.undone_at IS NULL
     ORDER BY t.id DESC
     LIMIT ${limit}`)) as unknown as {
     rows: {
@@ -742,7 +742,7 @@ export async function globalActivity(opts: { limit?: number; minTicks?: number }
     LEFT JOIN users mu ON mu.id = ml.user_id
     JOIN wedges w ON w.id = t.wedge_id
     JOIN wheels wh ON wh.id = w.wheel_id
-    WHERE ABS(l.cash) >= ${opts.minTicks ?? 0}
+    WHERE ABS(l.cash) >= ${opts.minTicks ?? 0} AND t.undone_at IS NULL
     ORDER BY t.id DESC
     LIMIT ${opts.limit ?? 60}`)) as unknown as {
     rows: {
