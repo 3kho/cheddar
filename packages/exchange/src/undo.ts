@@ -67,6 +67,28 @@ export async function undoTrade(
       }
     }
 
+    // Compute the target state for each order based on fills that remain (non-undone).
+    const filledRows = await tx.execute(sql`
+      SELECT l.order_id AS order_id, SUM(ABS(l.shares))::int AS filled
+      FROM trade_legs l
+      JOIN trades t ON t.id = l.trade_id
+      WHERE l.order_id IN (${sql.join(orderIds.map((id) => sql`${id}`), sql`, `)}) AND t.undone_at IS NULL
+      GROUP BY l.order_id
+    `) as unknown as { rows: { order_id: string; filled: number }[] };
+    const filledByOrder = new Map(filledRows.rows.map((r) => [r.order_id, r.filled]));
+
+    // Per-order target locked state and the delta from current DB state.
+    const orderTarget = new Map<string, { remaining: number; lockedTicks: number; lockedShares: number; lockedDelta: number; lockedSharesDelta: number }>();
+    for (const order of orderRows) {
+      const filled = filledByOrder.get(order.id) ?? 0;
+      const remaining = Math.max(0, order.qty - filled);
+      const targetLockedTicks = order.side === "BUY" ? order.price * remaining : 0;
+      const targetLockedShares = order.side === "SELL" ? remaining : 0;
+      const lockedDelta = targetLockedTicks - order.lockedTicks;
+      const lockedSharesDelta = targetLockedShares - order.lockedShares;
+      orderTarget.set(order.id, { remaining, lockedTicks: targetLockedTicks, lockedShares: targetLockedShares, lockedDelta, lockedSharesDelta });
+    }
+
     const acctCache = new Map<string, UserAccounts>();
     const getAcct = async (userId: string) => {
       let a = acctCache.get(userId);
@@ -78,24 +100,55 @@ export async function undoTrade(
 
     const deltas = new Deltas();
     let netCash = 0;
+
+    // Per-user locked deltas (aggregated across all their orders in this trade).
+    const userLockedDelta = new Map<string, number>();
+
     for (const leg of legs) {
       const cash = Number(leg.cash);
       netCash += cash;
       const order = orderById.get(leg.orderId)!;
+      const target = orderTarget.get(order.id)!;
       const a = await getAcct(leg.userId);
+
+      // Cash reversal: reverse what the leg did to available.
+      // Buyer: available += lockUsed + cash during fill → reverse: available -= lockUsed + cash
+      // Seller: available += cash during fill → reverse: available -= cash
+      // Combined with lockedDelta: net change = -cash (correct for both sides).
+      const lockedDelta = target.lockedDelta;
       if (leg.shares > 0) {
-        // Buyer: at fill they got their escrow back and paid the execution price. Reverse both.
+        // Buyer: available -= (lockUsed + cash) for the cash part, locked handled via lockedDelta below.
         const lockUsed = order.price * leg.shares;
         deltas.add(a.available, -(lockUsed + cash));
-        deltas.add(a.locked, lockUsed);
+        // Adjust available so that available + locked = -cash net:
+        // available += -(lockUsed + cash) - (lockedDelta - lockUsed) = -cash - lockedDelta
+        deltas.add(a.available, -(lockedDelta - lockUsed));
       } else {
-        // Seller: at fill they received cash. Reverse it.
+        // Seller: available -= cash; locked shares handled via position delta below.
         deltas.add(a.available, -cash);
       }
-      // Reverse the position change. Locked shares net to zero across placement+fill for sellers,
-      // and buyers never lock shares, so only the signed share change needs undoing.
-      await adjustPosition(tx, leg.userId, wedgeId, sharesDelta(leg.outcome, -leg.shares, 0));
+
+      // Aggregate locked delta per user (applied to account locked for BUY orders).
+      const curLocked = userLockedDelta.get(leg.userId) ?? 0;
+      userLockedDelta.set(leg.userId, curLocked + lockedDelta);
+
+      // Reverse the position change.
+      // For sellers, also reverse the locked shares in the position.
+      const posDelta: { yesShares?: number; noShares?: number; yesLocked?: number; noLocked?: number } =
+        leg.outcome === "YES"
+          ? { yesShares: -leg.shares, yesLocked: target.lockedSharesDelta }
+          : { noShares: -leg.shares, noLocked: target.lockedSharesDelta };
+      await adjustPosition(tx, leg.userId, wedgeId, posDelta);
     }
+
+    // Apply aggregated per-user locked deltas to the user_locked account.
+    for (const [userId, delta] of userLockedDelta) {
+      if (delta !== 0) {
+        const a = await getAcct(userId);
+        deltas.add(a.locked, delta);
+      }
+    }
+
     // The trade's net cash moved through the collateral account; reverse it.
     deltas.add(collateral, netCash);
     await postEntry(
@@ -107,29 +160,16 @@ export async function undoTrade(
     // Mark the trade reversed.
     await tx.update(trades).set({ undoneAt: now, undoneBy: input.actorId }).where(eq(trades.id, trade.id));
 
-    // Restore every order touched by the reversed trade: recompute remaining from the fills that
-    // remain (everything not just undone), then reflect the open portion in the order row.
-    const filledRows = await tx.execute(sql`
-      SELECT l.order_id AS order_id, SUM(ABS(l.shares))::int AS filled
-      FROM trade_legs l
-      JOIN trades t ON t.id = l.trade_id
-      WHERE l.order_id IN (${sql.join(orderIds.map((id) => sql`${id}`), sql`, `)}) AND t.undone_at IS NULL
-      GROUP BY l.order_id
-    `) as unknown as { rows: { order_id: string; filled: number }[] };
-    const filledByOrder = new Map(filledRows.rows.map((r) => [r.order_id, r.filled]));
-
+    // Restore every order touched by the reversed trade to its target state.
     for (const order of orderRows) {
-      const filled = filledByOrder.get(order.id) ?? 0;
-      const remaining = Math.max(0, order.qty - filled);
-      const lockedTicks = order.side === "BUY" ? order.price * remaining : 0;
-      const lockedShares = order.side === "SELL" ? remaining : 0;
-      const filledNow = remaining === 0;
+      const target = orderTarget.get(order.id)!;
+      const filledNow = target.remaining === 0;
       await tx
         .update(orders)
         .set({
-          remaining,
-          lockedTicks,
-          lockedShares,
+          remaining: target.remaining,
+          lockedTicks: target.lockedTicks,
+          lockedShares: target.lockedShares,
           status: filledNow ? ("filled" as const) : ("open" as const),
           closedAt: filledNow ? now : null,
         })
