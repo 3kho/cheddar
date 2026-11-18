@@ -14,7 +14,7 @@ import { ExchangeError, runTx } from "./errors";
 import { anchorFor, outcomeKeys, payoffs, type Holding } from "./lmsr";
 import { logEvent } from "./log";
 import { mousePrices } from "./mouse";
-import { MAX_WEDGES, cleanCloseTime, cleanIcon, isOtherLabel } from "./proposals";
+import { MAX_WEDGES, cleanCloseTime, cleanIcon } from "./proposals";
 import { assertReviewer, requireText, type ReviewOptions } from "./review";
 
 const SETTLED = ["resolved", "moldy"];
@@ -44,13 +44,7 @@ async function addOutcomeInTx(tx: Tx, wheelId: string, label: string, chance?: n
     throw new ExchangeError("INVALID", `“${label}” is already an outcome`);
   }
   const p0 = startChance(chance, ws.length);
-  // On a wheel with an "Other", new outcomes slot in above it so "Other" stays the last row.
-  const other = w.allowAdditions ? ws.find((x) => isOtherLabel(x.label)) : undefined;
-  let sortOrder = Math.max(...ws.map((x) => x.sortOrder)) + 1;
-  if (other) {
-    sortOrder = other.sortOrder;
-    await tx.update(wedges).set({ sortOrder: other.sortOrder + 1 }).where(eq(wedges.id, other.id));
-  }
+  const sortOrder = Math.max(...ws.map((x) => x.sortOrder)) + 1;
   const [wedge] = await tx
     .insert(wedges)
     .values({ wheelId, label, sortOrder })

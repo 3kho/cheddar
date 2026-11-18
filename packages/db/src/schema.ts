@@ -484,6 +484,9 @@ export const trades = pgTable(
     journalEntryId: bigint("journal_entry_id", { mode: "number" })
       .notNull()
       .references(() => journalEntries.id),
+    /** Set by a Cheesemonger when reversing this trade (audit trail keeps the original). */
+    undoneAt: ts("undone_at"),
+    undoneBy: uuid("undone_by").references(() => users.id),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [

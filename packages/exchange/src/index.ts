@@ -57,11 +57,13 @@ export {
   MAX_NAME_LENGTH,
   addCategory,
   cleanName,
+  haltWedge,
   removeCategory,
+  resumeWheel,
+  resumeWedge,
   setCategoryIcon,
   pauseWheel,
   renameUser,
-  resumeWheel,
   setCheesemonger,
   setSuperAdmin,
   suspendUser,
@@ -72,6 +74,7 @@ export { convertNo, mergePairs, mergeYesSet, type ConversionResult } from "./lin
 export { houseOutstanding } from "./house";
 export { MAX_GRANT_TICKS, grantLatta } from "./grants";
 export { addOutcome, requestOutcome, reviewOutcomeRequest, updateWheel, type WheelEdit } from "./outcomes";
+export { undoTrade, type UndoTradeResult } from "./undo";
 export {
   DEFAULT_REFERRAL,
   attachReferral,

@@ -28,6 +28,9 @@ export type AuditAction =
   | "wheel.pause"
   | "wheel.resume"
   | "wheel.liquidity"
+  | "wedge.halt"
+  | "wedge.resume"
+  | "trade.reverse"
   | "grant.lc"
   | "category.add"
   | "category.remove"
@@ -38,7 +41,7 @@ export interface AuditEvent {
   /** Null for system jobs. */
   actorId: string | null;
   action: AuditAction;
-  targetType?: "proposal" | "settlement" | "wheel" | "user" | "funder" | "outcome" | "report" | "category";
+  targetType?: "proposal" | "settlement" | "wheel" | "wedge" | "user" | "funder" | "outcome" | "report" | "category";
   targetId?: string;
   details?: Record<string, unknown>;
 }

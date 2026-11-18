@@ -198,6 +198,48 @@ export async function resumeWheel(db: AnyDb, input: { wheelId: string; actorId: 
   });
 }
 
+/** Halt a single outcome (wedge) on a wheel: no new orders on it, but the rest of the wheel keeps trading. Cancelling still works. */
+export async function haltWedge(
+  db: AnyDb,
+  input: { wedgeId: string; actorId: string; reason: string },
+  opts: { now?: () => Date } = {},
+) {
+  const reason = requireText(input.reason, "reason", 500);
+  const now = (opts.now ?? (() => new Date()))();
+  return runTx(db, async (tx) => {
+    await assertCheesemonger(tx, input.actorId);
+    const [wedge] = await tx.select().from(wedges).where(eq(wedges.id, input.wedgeId)).for("update");
+    if (!wedge) throw new ExchangeError("NOT_FOUND", "outcome not found");
+    if (wedge.status !== "open") throw new ExchangeError("INVALID", `this outcome is already ${wedge.status}`);
+    await tx.update(wedges).set({ status: "halted", bookVersion: wedge.bookVersion + 1 }).where(eq(wedges.id, wedge.id));
+    await logEvent(tx, {
+      actorId: input.actorId,
+      action: "wedge.halt",
+      targetType: "wedge",
+      targetId: wedge.id,
+      details: { label: wedge.label, wheelId: wedge.wheelId, reason },
+    });
+  });
+}
+
+/** Re-open a halted outcome so trading on it resumes. */
+export async function resumeWedge(db: AnyDb, input: { wedgeId: string; actorId: string }) {
+  return runTx(db, async (tx) => {
+    await assertCheesemonger(tx, input.actorId);
+    const [wedge] = await tx.select().from(wedges).where(eq(wedges.id, input.wedgeId)).for("update");
+    if (!wedge) throw new ExchangeError("NOT_FOUND", "outcome not found");
+    if (wedge.status !== "halted") throw new ExchangeError("INVALID", "this outcome is not halted");
+    await tx.update(wedges).set({ status: "open", bookVersion: wedge.bookVersion + 1 }).where(eq(wedges.id, wedge.id));
+    await logEvent(tx, {
+      actorId: input.actorId,
+      action: "wedge.resume",
+      targetType: "wedge",
+      targetId: wedge.id,
+      details: { label: wedge.label, wheelId: wedge.wheelId },
+    });
+  });
+}
+
 /** The category wheels fall back to when theirs is removed. It can't be removed itself. */
 export const DEFAULT_CATEGORY = "Hack Club";
 

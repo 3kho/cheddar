@@ -685,6 +685,9 @@ const ACTION_LABELS: Record<string, string> = {
   "user.demote": "removed a Cheesemonger",
   "wheel.pause": "paused trading",
   "wheel.resume": "resumed trading",
+  "wedge.halt": "halted an outcome",
+  "wedge.resume": "reopened an outcome",
+  "trade.reverse": "reversed a trade",
   "churn.run": "ran Churn",
 };
 

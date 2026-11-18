@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
+import { ReasonAction } from "@/components/ActionButton";
 import { ReportButton } from "@/components/ReportButton";
 import { ShareButton } from "@/components/ShareButton";
 import { ensureReferralCode } from "@cheddar/exchange";
@@ -18,7 +19,7 @@ import { SuggestOutcome } from "@/components/SuggestOutcome";
 import { Tabs } from "@/components/Tabs";
 import { TradePanel, type TradeWedge } from "@/components/TradePanel";
 import { WheelStatus, resolvedLabel } from "@/components/WheelCard";
-import { cancelOrderAction } from "@/lib/actions";
+import { cancelOrderAction, haltWedgeAction, undoTradeAction } from "@/lib/actions";
 import { formatChance, formatDate, formatLatta, formatShares, timeAgo } from "@/lib/format";
 import { bestPrice } from "@/lib/market";
 import {
@@ -195,6 +196,14 @@ export default async function WheelPage({
                 )}
               </span>
               <span className="shrink-0 text-[13px] text-muted">{timeAgo(a.at, now)}</span>
+              {user?.isCheesemonger && (
+                <ActionButton
+                  action={undoTradeAction.bind(null, a.id)}
+                  className="text-xs font-semibold text-no hover:underline"
+                >
+                  Reverse
+                </ActionButton>
+              )}
             </li>
           ))}
         </ul>
@@ -440,6 +449,7 @@ export default async function WheelPage({
                         <span className="block truncate text-base font-semibold">
                           {w.label}
                           {w.status === "resolved_yes" && <span className="ml-1.5 text-sm text-yes">Won</span>}
+                          {w.status === "halted" && <span className="ml-1.5 text-sm text-no">Halted</span>}
                         </span>
                         <span className="tabular text-[13px] text-muted">
                           {formatLatta(w.volumeTicks)} Vol.
@@ -473,6 +483,26 @@ export default async function WheelPage({
                           <span className="opacity-80">Buy No</span>
                           <span className="tabular text-base">{noPx == null ? "—" : `${noPx}¢`}</span>
                         </Link>
+                        {user?.isCheesemonger && (
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {w.status === "open" && (
+                              <ReasonAction
+                                action={haltWedgeAction.bind(null, w.id, true)}
+                                label="Halt"
+                                placeholder="Why close this outcome?"
+                                danger
+                              />
+                            )}
+                            {w.status === "halted" && (
+                              <ActionButton
+                                action={haltWedgeAction.bind(null, w.id, false, "")}
+                                className="text-xs font-semibold text-yes hover:underline"
+                              >
+                                Resume
+                              </ActionButton>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                     {done && <span className="relative hidden flex-[3] sm:block" />}

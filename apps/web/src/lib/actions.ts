@@ -34,13 +34,16 @@ import {
   rejectProposal,
   rejectSettlement,
   pauseWheel,
+  haltWedge,
   removeMouseFunder,
   resumeWheel,
+  resumeWedge,
   setCheesemonger,
   setSuperAdmin,
   submitProposal,
   suspendUser,
   syncUser,
+  undoTrade,
   unsuspendUser,
   withdrawProposal,
   type SettlementOutcome,
@@ -627,6 +630,30 @@ export async function resumeWheelAction(wheelId: string): Promise<ActionResult> 
     after(() => requote(wheelId));
     revalidatePath("/", "layout");
     return { ok: true, message: "Trading resumed." };
+  });
+}
+
+export async function haltWedgeAction(wedgeId: string, halt: boolean, reason: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    if (halt) {
+      await haltWedge(await getDb(), { wedgeId, actorId: u.id, reason });
+      revalidatePath("/", "layout");
+      return { ok: true, message: "Outcome halted. No new orders can be placed on it." };
+    }
+    await resumeWedge(await getDb(), { wedgeId, actorId: u.id });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Outcome reopened for trading." };
+  });
+}
+
+/** Cheesemonger: reverse a single trade (both legs), restoring positions, cash and any filled orders. */
+export async function undoTradeAction(tradeId: number): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    await undoTrade(await getDb(), { actorId: u.id, tradeId });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Trade reversed. Positions and cash are back to what they were." };
   });
 }
 

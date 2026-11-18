@@ -30,12 +30,7 @@ export const OTHER_LABEL = "Other";
 export const isOtherLabel = (label: string) => label.trim().toLowerCase() === OTHER_LABEL.toLowerCase();
 
 function cleanFields(input: ProposalFields, now: Date) {
-  let outcomes = cleanOutcomes(input.outcomes);
-  // A wheel that takes new outcomes needs an "Other", always last: it wins when none of the listed
-  // outcomes (including ones added later) do, so the list never has to be complete.
-  if (outcomes.length > 1 && input.allowAdditions) {
-    outcomes = cleanOutcomes([...outcomes.filter((o) => !isOtherLabel(o)), OTHER_LABEL]);
-  }
+  const outcomes = cleanOutcomes(input.outcomes);
   return {
     title: requireText(input.title, "title", 200),
     description: (input.description ?? "").trim().slice(0, 10_000),
