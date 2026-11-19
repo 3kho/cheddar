@@ -53,6 +53,20 @@ import {
   type SlackBlock,
   type SettlementOutcome,
 } from "@cheddar/exchange";
+import {
+  outcomeApprovedBlocks,
+  outcomeRejectedBlocks,
+  proposalApprovedBlocks,
+  proposalRejectedBlocks,
+  settlementApprovedBlocks,
+  settlementRejectedBlocks,
+  lattaGrantedBlocks,
+  accountSuspendedBlocks,
+  accountUnsuspendedBlocks,
+  setCheesemongerBlocks,
+  setSuperAdminBlocks,
+  tradeReversedBlocks,
+} from "@/lib/slack/blocks";
 import { and, eq, ne, sql, users, proposals, outcomeRequests, settlements, wheels, type AnyDb, type Tx } from "@cheddar/db";
 import { hackatimeToken, syncNow } from "./accounts";
 import { getDb, getExchange, getHackatime } from "./db";
@@ -405,15 +419,7 @@ export async function reviewOutcomeAction(
     if (r.approved) {
       await notifySlackUser(db, request!.proposerId, {
         text: `Your outcome suggestion “${request!.label}” was approved and added to the wheel.`,
-        blocks: [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `*Outcome approved*\nYour suggestion “${request!.label}” was approved and added to the wheel.`,
-            },
-          },
-        ],
+        blocks: outcomeApprovedBlocks(request!.label),
       });
       after(() => requote(r.wheel.id));
       revalidatePath("/", "layout");
@@ -421,15 +427,7 @@ export async function reviewOutcomeAction(
     }
     await notifySlackUser(db, request!.proposerId, {
       text: `Your outcome suggestion “${request!.label}” was rejected.`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Outcome rejected*\nYour suggestion “${request!.label}” was rejected by a Cheesemonger.${note ? `\nNote: ${note}` : ""}`,
-          },
-        },
-      ],
+      blocks: outcomeRejectedBlocks(request!.label, note),
     });
     revalidatePath("/", "layout");
     return { ok: true, message: "Suggestion rejected." };
@@ -465,15 +463,7 @@ export async function reviewProposalAction(
       if (liquidity > 0) await requote(wheel.id);
       await notifySlackUser(db, proposal!.proposerId, {
         text: `Your proposal “${wheel.title}” was approved and is now live.`,
-        blocks: [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `*Proposal approved*\nYour proposal “${wheel.title}” was approved and is now live at /wheel/${wheel.slug}.`,
-            },
-          },
-        ],
+        blocks: proposalApprovedBlocks(wheel.title, wheel.slug),
       });
       revalidatePath("/", "layout");
       return { ok: true, message: `Approved: /wheel/${wheel.slug}` };
@@ -481,15 +471,7 @@ export async function reviewProposalAction(
     await rejectProposal(db, { proposalId, reviewerId: u.id, note }, reviewOpts());
     await notifySlackUser(db, proposal!.proposerId, {
       text: `Your proposal “${proposal?.proposerId ? "" : ""}” was rejected.`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Proposal rejected*\nYour proposal was rejected by a Cheesemonger.${note ? `\nNote: ${note}` : ""}`,
-          },
-        },
-      ],
+      blocks: proposalRejectedBlocks(note),
     });
     revalidatePath("/cheesemongers");
     return { ok: true, message: "Proposal rejected." };
@@ -610,30 +592,14 @@ export async function reviewSettlementAction(
       const paid = report.reduce((s, r) => s + r.paidTicks, 0);
       await notifySlackUser(db, settlement!.proposerId, {
         text: `Your settlement request was approved — paid out ${formatLatta(paid)}.`,
-        blocks: [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `*Settlement approved*\nYour settlement request was approved — paid out ${formatLatta(paid)}.\n${proof ? `*Proof:* ${proof}` : ""}`,
-            },
-          },
-        ],
+        blocks: settlementApprovedBlocks(paid, proof),
       });
       return { ok: true, message: `Ripened! Paid out ${formatLatta(paid)}.` };
     }
     await rejectSettlement(db, { settlementId, reviewerId: u.id, note }, reviewOpts());
     await notifySlackUser(db, settlement!.proposerId, {
       text: `Your settlement request was rejected.`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Settlement rejected*\nYour settlement request was rejected by a Cheesemonger.${note ? `\nNote: ${note}` : ""}`,
-          },
-        },
-      ],
+      blocks: settlementRejectedBlocks(note),
     });
     after(() => requoteAll()); // trading reopened: The Mouse quotes again
     revalidatePath("/", "layout");
@@ -687,15 +653,7 @@ export async function grantLattaAction(userId: string, amount: string, reason: s
     await grantLatta(db, { recipientId: userId, actorId: u.id, ticks, reason });
     await notifySlackUser(db, userId, {
       text: `You were granted ${text} Lc: ${reason}`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Latta granted*\nYou were granted *${text} Lc*.\nReason: ${reason}`,
-          },
-        },
-      ],
+      blocks: lattaGrantedBlocks(text, reason),
     });
     revalidatePath("/", "layout");
     return { ok: true, message: `Granted ${text} Lc.` };
@@ -740,15 +698,7 @@ export async function suspendUserAction(userId: string, reason: string): Promise
     const r = await suspendUser(db, { userId, actorId: u.id, reason });
     await notifySlackUser(db, userId, {
       text: `Your account has been suspended: ${reason}`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Account suspended*\nYour Cheddar account has been suspended.\nReason: ${reason}`,
-          },
-        },
-      ],
+      blocks: accountSuspendedBlocks(reason),
     });
     revalidatePath("/", "layout");
     return { ok: true, message: `Suspended. ${r.cancelledOrders} open order(s) cancelled.` };
@@ -762,15 +712,7 @@ export async function unsuspendUserAction(userId: string, note: string): Promise
     await unsuspendUser(db, { userId, actorId: u.id, note });
     await notifySlackUser(db, userId, {
       text: `Your Cheddar account has been unsuspended. You can trade again.${note ? `\nNote: ${note}` : ""}`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Account unsuspended*\nYour Cheddar account has been unsuspended. You can trade again.${note ? `\nNote: ${note}` : ""}`,
-          },
-        },
-      ],
+      blocks: accountUnsuspendedBlocks(note),
     });
     revalidatePath("/", "layout");
     return { ok: true, message: "Unsuspended." };
@@ -784,15 +726,7 @@ export async function setCheesemongerAction(userId: string, value: boolean): Pro
     await setCheesemonger(db, { userId, actorId: u.id, value });
     await notifySlackUser(db, userId, {
       text: value ? "You are now a Cheesemonger!" : "You are no longer a Cheesemonger.",
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: value ? "*You are now a Cheesemonger!*\nYou can review proposals, outcomes, settlements, and moderate wheels." : "*You are no longer a Cheesemonger.*",
-          },
-        },
-      ],
+      blocks: setCheesemongerBlocks(value),
     });
     revalidatePath("/", "layout");
     return { ok: true, message: value ? "Now a Cheesemonger." : "No longer a Cheesemonger." };
@@ -806,15 +740,7 @@ export async function setSuperAdminAction(userId: string, value: boolean): Promi
     await setSuperAdmin(db, { userId, actorId: u.id, value });
     await notifySlackUser(db, userId, {
       text: value ? "You are now a super admin!" : "You are no longer a super admin.",
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: value ? "*You are now a super admin!*\nYou can manage users, Mouse funders, logs, and health." : "*You are no longer a super admin.*",
-          },
-        },
-      ],
+      blocks: setSuperAdminBlocks(value),
     });
     revalidatePath("/", "layout");
     return { ok: true, message: value ? "Now a super admin (and a Cheesemonger)." : "No longer a super admin." };
@@ -881,15 +807,7 @@ export async function undoTradeAction(tradeId: number): Promise<ActionResult> {
     const r = await undoTrade(db, { actorId: u.id, tradeId });
     await notifySlackUsers(db, r.users, {
       text: "A trade you were part of was reversed by a Cheesemonger. Your cash and shares are back to what they were.",
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Trade reversed*\nA Cheesemonger undid a trade you were part of. Your cash and shares are back to what they were.`,
-          },
-        },
-      ],
+      blocks: tradeReversedBlocks(),
     });
     revalidatePath("/", "layout");
     return { ok: true, message: "Trade reversed. Positions and cash are back to what they were." };
