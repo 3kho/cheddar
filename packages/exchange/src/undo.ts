@@ -10,6 +10,7 @@
 import { and, eq, inArray, isNull, orders, positions, sql, tradeLegs, trades, users, wedges, type AnyDb, type Tx } from "@cheddar/db";
 import { ExchangeError, runTx } from "./errors";
 import { adjustPosition, collateralAccount, Deltas, postEntry, sharesDelta, userAccounts, type UserAccounts } from "./ledger";
+import { releaseOrder } from "./exchange";
 import { logEvent } from "./log";
 
 export interface UndoTradeResult {
@@ -183,6 +184,25 @@ export async function undoTrade(
         .where(eq(orders.id, order.id));
     }
 
+    // After restoring orders, check if any open orders on this wedge now cross each other.
+    // Undoing a trade can restore a taker order that crosses resting orders placed afterward.
+    // If so, cancel all open orders on the wedge to guarantee a clean book.
+    const allOpen = await tx
+      .select()
+      .from(orders)
+      .where(and(eq(orders.wedgeId, wedgeId), eq(orders.status, "open")))
+      .for("update");
+    const crossed = detectCrossedOrders(allOpen);
+    if (crossed.length) {
+      for (const o of crossed) {
+        await releaseOrder(tx, o, "crossed_after_trade_undo", now);
+        await tx
+          .update(orders)
+          .set({ status: "cancelled", cancelReason: "crossed_after_trade_undo", closedAt: now, lockedTicks: 0, lockedShares: 0 })
+          .where(eq(orders.id, o.id));
+      }
+    }
+
     await tx.update(wedges).set({ bookVersion: wedge.bookVersion + 1 }).where(eq(wedges.id, wedgeId));
 
     await logEvent(tx, {
@@ -195,4 +215,26 @@ export async function undoTrade(
 
     return { tradeId: trade.id, users: involvedUsers };
   });
+}
+
+/**
+ * Check if any open orders on a wedge cross each other (buy price >= sell price
+ * on the same outcome). Returns all orders if any cross, empty array otherwise.
+ */
+function detectCrossedOrders(os: typeof orders.$inferSelect[]): typeof orders.$inferSelect[] {
+  const byOutcome = new Map<"YES" | "NO", typeof orders.$inferSelect[]>();
+  for (const o of os) {
+    const list = byOutcome.get(o.outcome) ?? [];
+    list.push(o);
+    byOutcome.set(o.outcome, list);
+  }
+  for (const [, outcomeOrders] of byOutcome) {
+    const buys = outcomeOrders.filter((o) => o.side === "BUY");
+    const sells = outcomeOrders.filter((o) => o.side === "SELL");
+    if (buys.length === 0 || sells.length === 0) continue;
+    const maxBuy = Math.max(...buys.map((o) => o.price));
+    const minSell = Math.min(...sells.map((o) => o.price));
+    if (maxBuy >= minSell) return os;
+  }
+  return [];
 }
