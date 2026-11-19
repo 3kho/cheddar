@@ -105,14 +105,20 @@ async function notifySlackUser(
   userId: string,
   message: Omit<SlackMessage, "channel">,
 ) {
-  if (!slackToken) return;
+  if (!slackToken) {
+    console.error("Slack notify skipped: SLACK_BOT_TOKEN not configured");
+    return;
+  }
   try {
     const [row] = await db
       .select({ slackId: users.slackId })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-    if (!row?.slackId) return;
+    if (!row?.slackId) {
+      console.error(`Slack notify skipped: user ${userId} has no slack_id`);
+      return;
+    }
     await sendSlackMessage(slackToken, { channel: row.slackId, ...message });
   } catch (e) {
     console.error("Slack notify failed:", e);
@@ -125,6 +131,7 @@ async function notifySlackUsers(
   userIds: string[],
   message: Omit<SlackMessage, "channel">,
 ) {
+  console.log(`Slack notify: sending to ${userIds.length} user(s): ${userIds.join(", ")}`);
   await Promise.all(userIds.map((id) => notifySlackUser(db, id, message)));
 }
 
@@ -805,10 +812,15 @@ export async function undoTradeAction(tradeId: number): Promise<ActionResult> {
     const u = await signedIn();
     const db = await getDb();
     const r = await undoTrade(db, { actorId: u.id, tradeId });
-    await notifySlackUsers(db, r.users, {
-      text: "A trade you were part of was reversed by a Cheesemonger. Your cash and shares are back to what they were.",
-      blocks: tradeReversedBlocks(),
-    });
+    // Fire-and-forget Slack notification — never fail the trade reversal because of it
+    try {
+      await notifySlackUsers(db, r.users, {
+        text: "A trade you were part of was reversed by a Cheesemonger. Your cash and shares are back to what they were.",
+        blocks: tradeReversedBlocks(),
+      });
+    } catch (e) {
+      console.error("Slack notification failed after trade reversal:", e);
+    }
     revalidatePath("/", "layout");
     return { ok: true, message: "Trade reversed. Positions and cash are back to what they were." };
   });
