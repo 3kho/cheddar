@@ -437,19 +437,17 @@ export function ProposeForm({
               </p>
             )}
 
-            {!isDateMode && (
-              <Toggle
-                checked={allowAdditions}
-                onChange={setAllowAdditions}
-                icon={<ListPlusIcon size={18} />}
-                title="Let people suggest new outcomes"
-                sub={
-                  allowAdditions
-                    ? "Anyone can suggest one on the wheel's page, and a Cheesemonger approves it before it's added. Whole-wheel conversions stay off while this is on, since the outcome list isn't final."
-                    : "The list above is final. (Cheesemongers can still add an outcome.)"
+            <Toggle
+              checked={allowAdditions}
+              onChange={setAllowAdditions}
+              icon={<ListPlusIcon size={18} />}
+              title="Let people suggest new outcomes"
+              sub={
+                allowAdditions
+                  ? "Anyone can suggest one on the wheel's page, and a Cheesemonger approves it before it's added. Whole-wheel conversions stay off while this is on, since the outcome list isn't final."
+                  : "The list above is final. (Cheesemongers can still add an outcome.)"
                 }
               />
-            )}
           </fieldset>
         )}
 
