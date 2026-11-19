@@ -10,6 +10,7 @@ import {
   type ProposalFormInput,
 } from "@/lib/actions";
 import { safely } from "@/lib/safely";
+import { formatDateEst } from "@/lib/format";
 import { Notice } from "./ActionButton";
 import { IconPicker } from "./IconPicker";
 import {
@@ -28,7 +29,7 @@ const MAX_OUTCOMES = 30;
 export type ProposeMode =
   | { kind: "propose" }
   | { kind: "proposal"; id: string }
-  | { kind: "wheel"; id: string; slug: string; wedges: { id: string; label: string }[] };
+  | { kind: "wheel"; id: string; slug: string; wedges: { id: string; label: string; dateValue: string | null }[] };
 
 export interface ProposeInitial {
   title: string;
@@ -37,6 +38,8 @@ export interface ProposeInitial {
   resolutionCriteria: string;
   /** Labels; one label (or none) means Yes / No. Ignored in wheel mode (it uses mode.wedges). */
   outcomes: string[];
+  /** For date markets: ISO datetime for each outcome. */
+  dateValues: string[];
   icon: string | null;
   /** ISO string. */
   closesAt: string | null;
@@ -100,7 +103,13 @@ export function ProposeForm({
   const existing = isWheel ? mode.wedges : [];
   const startMulti = isWheel ? existing.length > 1 : (initial?.outcomes.length ?? 0) > 1;
 
-  const [kind, setKind] = useState<"binary" | "multi">(startMulti ? "multi" : "binary");
+  const [kind, setKind] = useState<"binary" | "multi" | "date">(
+    isWheel
+      ? (existing.some((w) => w.dateValue) ? "date" : startMulti ? "multi" : "binary")
+      : startMulti
+        ? "multi"
+        : "binary",
+  );
   const [title, setTitle] = useState(initial?.title ?? "");
   const [category, setCategory] = useState(initial?.category ?? CATEGORIES[0] ?? "Hack Club");
   const [criteria, setCriteria] = useState(initial?.resolutionCriteria ?? "");
@@ -114,10 +123,12 @@ export function ProposeForm({
   const [preset, setPreset] = useState<Preset>(initial?.closesAt ? "custom" : "1w");
   const [custom, setCustom] = useState(initial?.closesAt ? toLocalInput(new Date(initial.closesAt)) : "");
   const [allowAdditions, setAllowAdditions] = useState(initial?.allowAdditions ?? false);
+  const [dateValues, setDateValues] = useState<string[]>(isWheel ? (initial?.dateValues ?? []).filter(Boolean) : []);
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, start] = useTransition();
 
   const multi = kind === "multi";
+  const isDateMode = kind === "date";
   const liveLabels = existing.map((w) => (labels[w.id] ?? "").trim());
   const typedOutcomes = outcomes.map((o) => o.trim()).filter(Boolean);
   const newOutcomes = typedOutcomes;
@@ -182,6 +193,7 @@ export function ProposeForm({
       category,
       resolutionCriteria: criteria,
       outcomes: multi ? (isWheel ? allLabels : newOutcomes) : [],
+      dateValues: isDateMode ? dateValues : null,
       icon,
       closesAt: closeDate && !Number.isNaN(closeDate.getTime()) ? closeDate.toISOString() : null,
       allowAdditions: multi && allowAdditions,
@@ -273,11 +285,12 @@ export function ProposeForm({
 
         <fieldset>
           <legend className="mb-2 text-sm font-semibold">Type</legend>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             {(
               [
                 ["binary", "Yes / No", "One question, two answers."],
                 ["multi", "Multiple choice", "Several outcomes, exactly one wins."],
+                ["date", "Date market", "Bet on when something happens. Options are dates."],
               ] as const
             ).map(([k, label, sub]) => (
               <button
@@ -298,32 +311,99 @@ export function ProposeForm({
           {isWheel && <p className="mt-1.5 text-xs text-muted">A live wheel&apos;s type can&apos;t change: people already hold its shares.</p>}
         </fieldset>
 
-        {multi && (
+        {(multi || isDateMode) && (
           <fieldset>
             <legend className="mb-2 flex w-full items-baseline justify-between text-sm font-semibold">
-              Outcomes
+              {isDateMode ? "Dates" : "Outcomes"}
               <span className="text-xs font-normal text-muted">
                 {shown.length}/{MAX_OUTCOMES}
               </span>
             </legend>
             <ol className="space-y-2">
               {existing.map((w, i) =>
-                outcomeRow({
-                  key: w.id,
-                  value: labels[w.id] ?? "",
-                  index: i,
-                  onChange: (v) => setLabels((m) => ({ ...m, [w.id]: v })),
-                  live: true,
-                }),
+                isDateMode ? (
+                  <li key={w.id} className="flex items-center gap-2">
+                    <span className="tabular w-5 text-right text-xs font-semibold text-faint">{i + 1}</span>
+                    <input
+                      value={labels[w.id] ?? ""}
+                      onChange={(e) => setLabels((m) => ({ ...m, [w.id]: e.target.value }))}
+                      maxLength={80}
+                      placeholder="e.g. Before Jan 15"
+                      className={`${field} h-10`}
+                      data-outcome
+                    />
+                    <input
+                      type="datetime-local"
+                      value={w.dateValue ?? ""}
+                      onChange={(e) => {
+                        const idx = existing.findIndex((x) => x.id === w.id);
+                        setDateValues((vals) =>
+                          vals.map((v, j) => (j === idx ? e.target.value : v)),
+                        );
+                      }}
+                      className={`${field} h-10 ml-2 w-[170px]`}
+                    />
+                    <span className="text-xs text-muted ml-2">EST</span>
+                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-faint">
+                      Live
+                    </span>
+                  </li>
+                ) : (
+                  outcomeRow({
+                    key: w.id,
+                    value: labels[w.id] ?? "",
+                    index: i,
+                    onChange: (v) => setLabels((m) => ({ ...m, [w.id]: v })),
+                    live: true,
+                  })
+                ),
               )}
               {outcomes.map((o, i) =>
-                outcomeRow({
-                  key: `new-${i}`,
-                  value: o,
-                  index: existing.length + i,
-                  onChange: (v) => setOutcome(i, v),
-                  onRemove: isWheel || outcomes.length > 2 ? () => setOutcomes((xs) => xs.filter((_, j) => j !== i)) : undefined,
-                }),
+                isDateMode ? (
+                  <li key={`new-${i}`} className="flex items-center gap-2">
+                    <span className="tabular w-5 text-right text-xs font-semibold text-faint">
+                      {existing.length + i + 1}
+                    </span>
+                    <input
+                      value={o}
+                      onChange={(e) => setOutcome(i, e.target.value)}
+                      maxLength={80}
+                      placeholder="e.g. Before Jan 15"
+                      className={`${field} h-10`}
+                      data-outcome
+                    />
+                    <input
+                      type="datetime-local"
+                      value={dateValues[i] ?? ""}
+                      onChange={(e) =>
+                        setDateValues((vals) =>
+                          vals.map((v, j) => (j === i ? e.target.value : v)),
+                        )
+                      }
+                      className={`${field} h-10 ml-2 w-[170px]`}
+                    />
+                    <span className="text-xs text-muted ml-2">EST</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOutcomes((xs) => xs.filter((_, j) => j !== i));
+                        setDateValues((vals) => vals.filter((_, j) => j !== i));
+                      }}
+                      className="ml-2 grid h-10 w-10 shrink-0 place-items-center rounded-[10px] text-muted hover:bg-hover hover:text-ink"
+                      aria-label={`Remove outcome ${i + 1}`}
+                    >
+                      <XIcon size={16} />
+                    </button>
+                  </li>
+                ) : (
+                  outcomeRow({
+                    key: `new-${i}`,
+                    value: o,
+                    index: existing.length + i,
+                    onChange: (v) => setOutcome(i, v),
+                    onRemove: isWheel || outcomes.length > 2 ? () => setOutcomes((xs) => xs.filter((_, j) => j !== i)) : undefined,
+                  })
+                ),
               )}
             </ol>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 pl-7">
@@ -331,6 +411,7 @@ export function ProposeForm({
                 type="button"
                 onClick={() => {
                   setOutcomes((xs) => [...xs, ""]);
+                  setDateValues((xs) => [...xs, ""]);
                   focusOutcome(existing.length + outcomes.length);
                 }}
                 disabled={existing.length + outcomes.length >= MAX_OUTCOMES}
@@ -349,17 +430,26 @@ export function ProposeForm({
               </span>
             </div>
 
-            <Toggle
-              checked={allowAdditions}
-              onChange={setAllowAdditions}
-              icon={<ListPlusIcon size={18} />}
-              title="Let people suggest new outcomes"
-              sub={
-                allowAdditions
-                  ? "Anyone can suggest one on the wheel's page, and a Cheesemonger approves it before it's added. Whole-wheel conversions stay off while this is on, since the outcome list isn't final."
-                  : "The list above is final. (Cheesemongers can still add an outcome.)"
-              }
-            />
+            {isDateMode && (
+              <p className="mt-1.5 text-xs text-muted">
+                All times shown in <strong>Eastern Time (ET)</strong>. When a date passes, its option is
+                automatically halted. When every date has passed, the wheel can be resolved.
+              </p>
+            )}
+
+            {!isDateMode && (
+              <Toggle
+                checked={allowAdditions}
+                onChange={setAllowAdditions}
+                icon={<ListPlusIcon size={18} />}
+                title="Let people suggest new outcomes"
+                sub={
+                  allowAdditions
+                    ? "Anyone can suggest one on the wheel's page, and a Cheesemonger approves it before it's added. Whole-wheel conversions stay off while this is on, since the outcome list isn't final."
+                    : "The list above is final. (Cheesemongers can still add an outcome.)"
+                }
+              />
+            )}
           </fieldset>
         )}
 
@@ -492,7 +582,9 @@ export function ProposeForm({
               )}
               <p className={`mt-2 text-xs ${closeProblem ? "text-no" : "text-muted"}`}>
                 {closeProblem ??
-                  (closeDate ? `Trading stops ${closeDate.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}.` : "")}
+                  (closeDate
+                    ? `Trading stops ${formatDateEst(closeDate)} ET.`
+                    : "")}
               </p>
             </div>
           ) : (

@@ -52,6 +52,18 @@ export function formatDate(d: Date | string): string {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+/** Format a date in Eastern Time, e.g. "Jan 15, 2026 at 3:00 PM ET". */
+export function formatDateEst(d: Date | string): string {
+  return new Date(d).toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function timeUntil(d: Date | string, now = Date.now()): string {
   const ms = new Date(d).getTime() - now;
   if (ms <= 0) return "Closed";

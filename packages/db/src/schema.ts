@@ -87,8 +87,7 @@ export const wedgeStatusEnum = pgEnum("wedge_status", [
   "resolved_yes",
   "resolved_no",
   "moldy",
-]);
-export const reviewStatusEnum = pgEnum("review_status", ["pending", "approved", "rejected", "withdrawn"]);
+]);export const reviewStatusEnum = pgEnum("review_status", ["pending", "approved", "rejected", "withdrawn"]);
 /** wedge_wins: the named wedge resolves YES and every other wedge NO.
  *  all_no:     every wedge resolves NO (only valid for single-wedge / binary wheels).
  *  moldy:      the wheel is voided. */
@@ -214,6 +213,8 @@ export const proposals = pgTable(
     icon: text("icon"),
     /** Wedge labels. One label = a binary Yes/No wheel. */
     outcomes: jsonb("outcomes").$type<string[]>().notNull(),
+    /** For date markets: the datetime for each outcome, parallel to outcomes. Null for non-date markets. */
+    dateValues: jsonb("date_values").$type<string[] | null>(),
     /** Multi-outcome only: people may suggest new outcomes after launch, for a Cheesemonger to add. */
     allowAdditions: boolean("allow_additions").notNull().default(false),
     status: reviewStatusEnum("status").notNull().default("pending"),
@@ -262,11 +263,14 @@ export const wheels = pgTable(
     mmAnchor: jsonb("mm_anchor").$type<Record<string, number>>(),
     /** Multi-outcome only: people may suggest new outcomes, which a Cheesemonger can add. */
     allowAdditions: boolean("allow_additions").notNull().default(false),
+    /** Market type: 'standard' (binary/multi-choice) or 'date' (date-based options). */
+    marketType: text("market_type").notNull().default("standard"),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [
     index("wheels_status_idx").on(t.status, t.closesAt),
     check("wheels_liquidity_range", sql`${t.liquidity} BETWEEN 0 AND 1000000`),
+    check("wheels_market_type_range", sql`${t.marketType} IN ('standard', 'date')`),
   ],
 );
 
@@ -278,6 +282,8 @@ export const wedges = pgTable(
       .notNull()
       .references(() => wheels.id),
     label: text("label").notNull(),
+    /** For date markets: the date/time this option represents. */
+    dateValue: ts("date_value"),
     sortOrder: integer("sort_order").notNull().default(0),
     status: wedgeStatusEnum("status").notNull().default("open"),
     /** Last traded YES price in ticks, for cards and charts. */

@@ -19,8 +19,8 @@ import { SuggestOutcome } from "@/components/SuggestOutcome";
 import { Tabs } from "@/components/Tabs";
 import { TradePanel, type TradeWedge } from "@/components/TradePanel";
 import { WheelStatus, resolvedLabel } from "@/components/WheelCard";
-import { cancelOrderAction, haltWedgeAction, undoTradeAction } from "@/lib/actions";
-import { formatChance, formatDate, formatLatta, formatShares, timeAgo } from "@/lib/format";
+import { cancelOrderAction, haltPassedDateWedgesAction, haltWedgeAction, undoTradeAction } from "@/lib/actions";
+import { formatChance, formatDate, formatDateEst, formatLatta, formatShares, timeAgo } from "@/lib/format";
 import { bestPrice } from "@/lib/market";
 import {
   balancesOf,
@@ -61,9 +61,20 @@ export default async function WheelPage({
   searchParams: Promise<{ w?: string; o?: string }>;
 }) {
   const [{ slug }, sp, user] = await Promise.all([params, searchParams, currentUser()]);
-  const data = await getWheel(slug);
+  let data = await getWheel(slug);
   if (!data) notFound();
-  const { wheel, depth, history, settlement, creatorName, settlementBy, settlementProposedBy } = data;
+  let { wheel, depth, history, settlement, creatorName, settlementBy, settlementProposedBy } = data;
+  // On date markets, auto-halt any options whose date has passed, then refresh.
+  if (wheel.marketType === "date" && wheel.status === "open") {
+    await haltPassedDateWedgesAction(wheel.id);
+    data = await getWheel(slug);
+    if (!data) notFound();
+    ({ wheel, depth, history, settlement, creatorName, settlementBy, settlementProposedBy } = data);
+  }
+  // On date markets, auto-halt any options whose date has passed.
+  if (wheel.marketType === "date" && wheel.status === "open") {
+    await haltPassedDateWedgesAction(wheel.id);
+  }
   // Logged-in people share a link that signs new people up as their invites.
   const shareUrl = user ? inviteUrl(await ensureReferralCode(await getDb(), user.id), `/wheel/${wheel.slug}`) : `${env.appUrl}/wheel/${wheel.slug}`;
   const binary = wheel.wedges.length === 1;
@@ -414,6 +425,9 @@ export default async function WheelPage({
                     style={{ background: PAIR[i] }}
                   >
                     <span className="max-w-24 truncate text-xs font-semibold uppercase opacity-80">{w.label}</span>
+                    {wheel.marketType === "date" && w.dateValue && (
+                      <span className="ml-1 text-[10px] text-muted">{formatDateEst(w.dateValue)}</span>
+                    )}
                     <span className="tabular text-sm font-bold">{px == null ? "—" : `${px}¢`}</span>
                   </Link>
                 );
@@ -448,6 +462,9 @@ export default async function WheelPage({
                       <span className="min-w-0">
                         <span className="block truncate text-base font-semibold">
                           {w.label}
+                          {wheel.marketType === "date" && w.dateValue && (
+                            <span className="ml-1 text-[10px] text-muted block">{formatDateEst(w.dateValue)}</span>
+                          )}
                           {w.status === "resolved_yes" && <span className="ml-1.5 text-sm text-yes">Won</span>}
                           {w.status === "halted" && <span className="ml-1.5 text-sm text-no">Halted</span>}
                         </span>

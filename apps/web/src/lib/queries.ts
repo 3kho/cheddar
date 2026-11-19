@@ -34,6 +34,8 @@ export interface WedgeView {
   id: string;
   label: string;
   status: string;
+  /** For date markets: the date/time this option represents. */
+  dateValue: Date | null;
   lastYesPrice: number | null;
   bestBid: number | null;
   bestAsk: number | null;
@@ -64,6 +66,8 @@ export interface WheelView {
   liquidity: number;
   /** Multi-outcome wheels where people can suggest new outcomes. */
   allowAdditions: boolean;
+  /** Market type: 'standard' or 'date'. */
+  marketType: string;
   volumeTicks: number;
   volume24hTicks: number;
   wedges: WedgeView[];
@@ -127,6 +131,7 @@ async function wedgeViews(wheelIds: string[]): Promise<Map<string, WedgeView[]>>
       id: w.id,
       label: w.label,
       status: w.status,
+      dateValue: w.dateValue ?? null,
       lastYesPrice: w.lastYesPrice,
       bestBid,
       bestAsk,
@@ -143,6 +148,7 @@ async function wedgeViews(wheelIds: string[]): Promise<Map<string, WedgeView[]>>
 function toWheelView(w: typeof wheels.$inferSelect, ws: WedgeView[]): WheelView {
   return {
     ...w,
+    marketType: w.marketType,
     volumeTicks: ws.reduce((n, x) => n + x.volumeTicks, 0),
     volume24hTicks: ws.reduce((n, x) => n + x.volume24hTicks, 0),
     wedges: ws,

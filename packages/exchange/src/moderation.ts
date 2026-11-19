@@ -300,3 +300,41 @@ export async function setCategoryIcon(db: AnyDb, input: { name: string; icon: st
     });
   });
 }
+
+/**
+ * On date markets, halt any open wedge whose date_value has passed.
+ * Returns how many wedges were halted. Safe to run repeatedly.
+ */
+export async function haltPassedDateWedges(
+  db: AnyDb,
+  input: { actorId: string; now?: () => Date },
+) {
+  const now = (input.now ?? (() => new Date()))();
+  return runTx(db, async (tx) => {
+    await assertCheesemonger(tx, input.actorId);
+
+    const stale = await tx
+      .select({
+        id: wedges.id,
+        wheelId: wedges.wheelId,
+        label: wedges.label,
+        dateValue: wedges.dateValue,
+        bookVersion: wedges.bookVersion,
+      })
+      .from(wedges)
+      .where(and(eq(wedges.status, "open"), sql`${wedges.dateValue} IS NOT NULL AND ${wedges.dateValue} < ${now}`));
+
+    for (const w of stale) {
+      await tx.update(wedges).set({ status: "halted", bookVersion: w.bookVersion + 1 }).where(eq(wedges.id, w.id));
+      await logEvent(tx, {
+        actorId: input.actorId,
+        action: "wedge.halt",
+        targetType: "wedge",
+        targetId: w.id,
+        details: { label: w.label, wheelId: w.wheelId, dateValue: w.dateValue, reason: "date passed" },
+      });
+    }
+
+    return { halted: stale.length };
+  });
+}

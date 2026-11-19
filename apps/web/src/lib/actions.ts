@@ -46,13 +46,14 @@ import {
   undoTrade,
   unsuspendUser,
   withdrawProposal,
+  haltPassedDateWedges,
   sendSlackMessage,
   slackUserIds,
   type SlackMessage,
   type SlackBlock,
   type SettlementOutcome,
 } from "@cheddar/exchange";
-import { and, eq, ne, sql, users, proposals, outcomeRequests, settlements, type AnyDb, type Tx } from "@cheddar/db";
+import { and, eq, ne, sql, users, proposals, outcomeRequests, settlements, wheels, type AnyDb, type Tx } from "@cheddar/db";
 import { hackatimeToken, syncNow } from "./accounts";
 import { getDb, getExchange, getHackatime } from "./db";
 import { env } from "./env";
@@ -270,6 +271,8 @@ export interface ProposalFormInput {
   resolutionCriteria: string;
   /** Outcome labels for a multi-outcome wheel; empty for Yes/No. */
   outcomes: string[];
+  /** For date markets: ISO datetime for each outcome, parallel to outcomes. Null for non-date markets. */
+  dateValues: string[] | null;
   /** "svg:<name>" or a small data:image URL; empty for the category's icon. */
   icon: string;
   /** ISO time trading stops, or null to stay open until someone asks to close it. */
@@ -280,6 +283,14 @@ export interface ProposalFormInput {
 
 function proposalFields(input: ProposalFormInput) {
   const outcomes = (Array.isArray(input.outcomes) ? input.outcomes : []).map((s) => String(s).trim()).filter(Boolean);
+  const dateValues = input.dateValues
+    ? input.dateValues
+        .map((s) => {
+          const d = new Date(s);
+          return Number.isNaN(d.getTime()) ? null : d;
+        })
+        .filter((d): d is Date => d !== null)
+    : null;
   if (outcomes.length === 1) throw new ExchangeError("INVALID", "A multi-outcome wheel needs at least two outcomes.");
   return {
     title: input.title,
@@ -288,6 +299,7 @@ function proposalFields(input: ProposalFormInput) {
     resolutionCriteria: input.resolutionCriteria,
     icon: input.icon,
     outcomes: outcomes.length ? outcomes : ["Yes"],
+    dateValues: dateValues?.length ? dateValues : null,
     closesAt: parseClose(input.closesAt),
     allowAdditions: outcomes.length > 1 && !!input.allowAdditions,
   };
@@ -840,6 +852,24 @@ export async function haltWedgeAction(wedgeId: string, halt: boolean, reason: st
     await resumeWedge(await getDb(), { wedgeId, actorId: u.id });
     revalidatePath("/", "layout");
     return { ok: true, message: "Outcome reopened for trading." };
+  });
+}
+
+/** Cheesemonger: halt any date options whose time has passed on a wheel. */
+export async function haltPassedDateWedgesAction(wheelId: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const u = await signedIn();
+    const db = await getDb();
+    const [wheel] = await db
+      .select({ marketType: wheels.marketType })
+      .from(wheels)
+      .where(eq(wheels.id, wheelId))
+      .limit(1);
+    if (!wheel) return { ok: false, error: "Wheel not found" };
+    if (wheel.marketType !== "date") return { ok: false, error: "This wheel is not a date market." };
+    const r = await haltPassedDateWedges(db, { actorId: u.id });
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Halted ${r.halted} passed date outcome${r.halted === 1 ? "" : "s"}.` };
   });
 }
 

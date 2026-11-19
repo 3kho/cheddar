@@ -33,7 +33,16 @@ export default async function EditWheelPage({ params }: { params: Promise<{ slug
         <ProposeForm
           categories={await allCategories()}
           icons={listMarketIcons()}
-          mode={{ kind: "wheel", id: wheel.id, slug: wheel.slug, wedges: wheel.wedges.map((w) => ({ id: w.id, label: w.label })) }}
+          mode={{
+            kind: "wheel",
+            id: wheel.id,
+            slug: wheel.slug,
+            wedges: wheel.wedges.map((w) => ({
+              id: w.id,
+              label: w.label,
+              dateValue: w.dateValue?.toISOString() ?? null,
+            })),
+          }}
           initial={{
             title: wheel.title,
             description: wheel.description,
@@ -43,6 +52,7 @@ export default async function EditWheelPage({ params }: { params: Promise<{ slug
             icon: wheel.icon,
             closesAt: wheel.closesAt?.toISOString() ?? null,
             allowAdditions: wheel.allowAdditions,
+            dateValues: wheel.wedges.map((w) => w.dateValue?.toISOString()).filter(Boolean) as string[],
           }}
         />
       )}

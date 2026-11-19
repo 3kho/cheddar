@@ -57,6 +57,7 @@ export {
   MAX_NAME_LENGTH,
   addCategory,
   cleanName,
+  haltPassedDateWedges,
   haltWedge,
   removeCategory,
   resumeWheel,

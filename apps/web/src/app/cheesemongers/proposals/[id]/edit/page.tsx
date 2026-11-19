@@ -40,6 +40,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
             category: p.category,
             resolutionCriteria: p.resolutionCriteria,
             outcomes: p.outcomes,
+            dateValues: p.dateValues ?? [],
             icon: p.icon,
             closesAt: p.closesAt?.toISOString() ?? null,
             allowAdditions: p.allowAdditions,

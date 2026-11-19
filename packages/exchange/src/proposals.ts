@@ -18,6 +18,8 @@ export interface ProposalInput {
   icon?: string | null;
   /** Wedge labels. One label makes a binary Yes/No wheel. */
   outcomes: string[];
+  /** For date markets: the datetime for each outcome, parallel to outcomes. Null for non-date markets. */
+  dateValues?: Date[] | null;
   /** Multi-outcome only: let people suggest new outcomes after launch. */
   allowAdditions?: boolean;
 }
@@ -31,6 +33,7 @@ export const isOtherLabel = (label: string) => label.trim().toLowerCase() === OT
 
 function cleanFields(input: ProposalFields, now: Date) {
   const outcomes = cleanOutcomes(input.outcomes);
+  const dateValues = input.dateValues ? input.dateValues.map((d) => d.toISOString()) : null;
   return {
     title: requireText(input.title, "title", 200),
     description: (input.description ?? "").trim().slice(0, 10_000),
@@ -39,6 +42,7 @@ function cleanFields(input: ProposalFields, now: Date) {
     closesAt: cleanCloseTime(input.closesAt, now),
     icon: cleanIcon(input.icon),
     outcomes,
+    dateValues,
     allowAdditions: outcomes.length > 1 && !!input.allowAdditions,
   };
 }
@@ -148,6 +152,8 @@ export async function approveProposal(
     await assertReviewer(tx, input.reviewerId, p.proposerId, opts);
     if (p.closesAt && p.closesAt <= now) throw new ExchangeError("INVALID", "this proposal's close time has already passed");
 
+    const isDateMarket = p.dateValues != null && p.dateValues.length > 0;
+
     const [wheel] = await tx
       .insert(wheels)
       .values({
@@ -159,13 +165,22 @@ export async function approveProposal(
         closesAt: p.closesAt,
         icon: p.icon,
         allowAdditions: p.outcomes.length > 1 && p.allowAdditions,
+        marketType: isDateMarket ? "date" : "standard",
         creatorId: p.proposerId,
         proposalId: p.id,
       })
       .returning();
     const ws = await tx
       .insert(wedges)
-      .values(p.outcomes.map((label, i) => ({ wheelId: wheel!.id, label, sortOrder: i })))
+      .values(
+        p.outcomes.map((label, i) => ({
+          wheelId: wheel!.id,
+          label,
+          sortOrder: i,
+          dateValue:
+            isDateMarket && p.dateValues ? new Date(p.dateValues[i]!) : null,
+        }))
+      )
       .returning();
     if (liquidity > 0) {
       const keys = outcomeKeys(ws.map((w) => w.id));
