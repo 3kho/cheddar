@@ -577,7 +577,18 @@ export default async function WheelPage({
           </details>
         )}
 
-        {canSettle && <SettleForm id="close" wheelId={wheel.id} wedges={wheel.wedges.map((w) => ({ id: w.id, label: w.label }))} />}
+        {canSettle && (
+          <SettleForm
+            id="close"
+            wheelId={wheel.id}
+            wedges={wheel.wedges.map((w) => ({
+              id: w.id,
+              label: w.label,
+              dateValue: w.dateValue?.toISOString() ?? null,
+            }))}
+            marketType={wheel.marketType}
+          />
+        )}
 
         <section>
           <h2 className="mb-3 text-xl font-semibold tracking-[-0.01em]">Rules</h2>

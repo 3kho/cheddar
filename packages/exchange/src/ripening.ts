@@ -11,6 +11,7 @@
  *       winning wedge:  YES 100, NO 0
  *       losing wedge:   YES 0,   NO 100
  *       Moldy (void):   YES 50,  NO 50   (Polymarket-style 50-50)
+ *       Date market:    per-wedge based on event_date comparison
  *   - collateral is exactly 100 per YES/NO pair, so every case empties it to 0.
  */
 import { asc, eq, and, orders, positions, settlements, users, wedges, wheels, type AnyDb, type Tx } from "@cheddar/db";
@@ -22,14 +23,18 @@ import { ensureMouse } from "./churn";
 import { repayHouse } from "./house";
 import { assertReviewer, requireText, type ReviewOptions } from "./review";
 
-export type SettlementOutcome = "wedge_wins" | "all_no" | "moldy";
+export type SettlementOutcome = "wedge_wins" | "all_no" | "all_yes" | "moldy" | "date";
 
 export interface ProposeSettlementInput {
   wheelId: string;
   proposerId: string;
   outcome: SettlementOutcome;
-  /** Required for wedge_wins. */
+  /** Required for wedge_wins (single winner). */
   winningWedgeId?: string;
+  /** For multi-winner markets: array of winning wedge ids. Required for multi-yes/all_yes. */
+  winningWedgeIds?: string[];
+  /** For date markets: the event date. Wedges with date_value >= event_date resolve YES, others NO. */
+  eventDate?: string;
   evidence: string;
 }
 
@@ -49,15 +54,37 @@ export async function proposeSettlement(db: AnyDb, input: ProposeSettlementInput
       throw new ExchangeError("FORBIDDEN", "only the wheel's creator or a Cheesemonger can propose a settlement");
     }
     const ws = await lockWedges(tx, wheel.id);
+    const wedgeIds = ws.map((w) => w.id);
+
+    // Validate inputs based on outcome type
     if (input.outcome === "wedge_wins") {
+      if (!input.winningWedgeId) throw new ExchangeError("INVALID", "wedge_wins requires a winning wedge");
       if (!ws.some((w) => w.id === input.winningWedgeId)) {
         throw new ExchangeError("INVALID", "the winning wedge must belong to this wheel");
       }
     } else if (input.winningWedgeId) {
-      throw new ExchangeError("INVALID", "only wedge_wins names a winning wedge");
+      throw new ExchangeError("INVALID", "only wedge_wins names a single winning wedge");
     }
-    if (input.outcome === "all_no" && ws.length !== 1) {
-      throw new ExchangeError("INVALID", "a multi-outcome wheel has exactly one winner; use Moldy to void it");
+
+    if (input.outcome === "date") {
+      if (!input.eventDate) throw new ExchangeError("INVALID", "date market settlement requires an event date");
+      if (wheel.marketType !== "date") throw new ExchangeError("INVALID", "date settlement is only for date markets");
+      // Validate all event dates exist
+      if (ws.some((w) => !w.dateValue)) {
+        throw new ExchangeError("INVALID", "all date outcomes must have a date_value set");
+      }
+    }
+
+    if (input.outcome === "all_yes" || input.outcome === "all_no") {
+      if (ws.length <= 1) throw new ExchangeError("INVALID", "all_yes/all_no requires multiple outcomes");
+    }
+
+    if (input.outcome === "date" && input.eventDate) {
+      const eventDt = new Date(input.eventDate);
+      const winningWedgeIds = ws
+        .filter((w) => w.dateValue && new Date(w.dateValue) >= eventDt)
+        .map((w) => w.id);
+      input.winningWedgeIds = winningWedgeIds;
     }
 
     const [s] = await tx
@@ -67,6 +94,8 @@ export async function proposeSettlement(db: AnyDb, input: ProposeSettlementInput
         proposerId: input.proposerId,
         outcome: input.outcome,
         winningWedgeId: input.winningWedgeId ?? null,
+        winningWedgeIds: input.winningWedgeIds ?? null,
+        eventDate: input.eventDate ? new Date(input.eventDate) : null,
         evidence,
       })
       .returning();
@@ -80,7 +109,15 @@ export async function proposeSettlement(db: AnyDb, input: ProposeSettlementInput
       action: "settlement.propose",
       targetType: "settlement",
       targetId: s!.id,
-      details: { wheelId: wheel.id, title: wheel.title, slug: wheel.slug, outcome: input.outcome, winningWedgeId: input.winningWedgeId ?? null },
+      details: {
+        wheelId: wheel.id,
+        title: wheel.title,
+        slug: wheel.slug,
+        outcome: input.outcome,
+        winningWedgeId: input.winningWedgeId ?? null,
+        winningWedgeIds: input.winningWedgeIds ?? null,
+        eventDate: input.eventDate ?? null,
+      },
     });
     return s!;
   });
@@ -148,10 +185,28 @@ export async function approveSettlement(
     if (wheel.status !== "ripening") throw new ExchangeError("INVALID", `this wheel is ${wheel.status}`);
     const ws = await lockWedges(tx, wheel.id);
 
+    // Determine per-wedge results
+    const winningWedgeIds = new Set(s.winningWedgeIds ?? []);
+    const eventDate = s.eventDate ?? null;
+
     const report: WedgePayout[] = [];
     for (const w of ws) {
-      const result: WedgePayout["result"] =
-        s.outcome === "moldy" ? "moldy" : s.outcome === "wedge_wins" && w.id === s.winningWedgeId ? "resolved_yes" : "resolved_no";
+      let result: WedgePayout["result"];
+      if (s.outcome === "moldy") {
+        result = "moldy";
+      } else if (s.outcome === "date") {
+        // Date market: YES if date_value >= event_date, NO otherwise
+        result = w.dateValue && eventDate && new Date(w.dateValue) >= eventDate ? "resolved_yes" : "resolved_no";
+      } else if (s.outcome === "wedge_wins") {
+        result = w.id === s.winningWedgeId ? "resolved_yes" : "resolved_no";
+      } else if (s.outcome === "all_yes") {
+        result = winningWedgeIds.has(w.id) ? "resolved_yes" : "resolved_no";
+      } else if (s.outcome === "all_no") {
+        result = "resolved_no";
+      } else {
+        throw new ExchangeError("INVALID", `unknown settlement outcome ${s.outcome}`);
+      }
+
       const [yesPay, noPay] = result === "moldy" ? [50, 50] : result === "resolved_yes" ? [100, 0] : [0, 100];
 
       // 1. Cancel open orders so every escrowed Latta and share is back with its owner.

@@ -548,27 +548,53 @@ export async function convertNoAction(wheelId: string, wedgeIds: string[], share
 
 export async function proposeSettlementAction(input: {
   wheelId: string;
-  /** "wedge:<id>", "all_no" or "moldy" */
+  /** "wedge:<id>", "all_no", "all_yes", "moldy", or "date:<iso-date>" */
   choice: string;
+  /** For multi-winner markets: comma-separated winning wedge ids (e.g. "wedge:<id1>,wedge:<id2>") */
+  winningWedgeIds?: string;
+  /** For date markets: the event date ISO string */
+  eventDate?: string;
   evidence: string;
 }): Promise<ActionResult> {
   return attempt(async () => {
     const u = await signedIn(true);
     let outcome: SettlementOutcome;
     let winningWedgeId: string | undefined;
+    let winningWedgeIds: string[] | undefined;
+    let eventDate: string | undefined;
+
     if (input.choice.startsWith("wedge:")) {
       outcome = "wedge_wins";
       winningWedgeId = input.choice.slice("wedge:".length);
-    } else if (input.choice === "all_no" || input.choice === "moldy") {
-      outcome = input.choice;
+    } else if (input.choice.startsWith("date:")) {
+      outcome = "date";
+      eventDate = input.choice.slice("date:".length);
+    } else if (input.choice === "all_no") {
+      outcome = "all_no";
+    } else if (input.choice === "all_yes") {
+      outcome = "all_yes";
+    } else if (input.choice === "moldy") {
+      outcome = "moldy";
     } else {
       return fail("Pick an outcome.");
     }
+
+    // Parse multi-winner wedge ids
+    if (input.winningWedgeIds) {
+      winningWedgeIds = input.winningWedgeIds
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean)
+        .map((id) => id.startsWith("wedge:") ? id.slice("wedge:".length) : id);
+    }
+
     await proposeSettlement(await getDb(), {
       wheelId: input.wheelId,
       proposerId: u.id,
       outcome,
       winningWedgeId,
+      winningWedgeIds,
+      eventDate,
       evidence: input.evidence,
     });
     after(() => requote(input.wheelId)); // pulls The Mouse's quotes while it ripens

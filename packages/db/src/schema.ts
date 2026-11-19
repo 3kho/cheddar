@@ -91,7 +91,7 @@ export const wedgeStatusEnum = pgEnum("wedge_status", [
 /** wedge_wins: the named wedge resolves YES and every other wedge NO.
  *  all_no:     every wedge resolves NO (only valid for single-wedge / binary wheels).
  *  moldy:      the wheel is voided. */
-export const settlementOutcomeEnum = pgEnum("settlement_outcome", ["wedge_wins", "all_no", "moldy"]);
+export const settlementOutcomeEnum = pgEnum("settlement_outcome", ["wedge_wins", "all_no", "all_yes", "moldy", "date"]);
 export const churnStatusEnum = pgEnum("churn_status", ["credited", "no_change", "skipped_untrusted", "error"]);
 export const oauthProviderEnum = pgEnum("oauth_provider", ["hca", "hackatime"]);
 
@@ -340,6 +340,10 @@ export const settlements = pgTable(
     winningWedgeId: uuid("winning_wedge_id").references(() => wedges.id),
     /** The close request's reasoning, for Cheesemongers only. */
     evidence: text("evidence").notNull(),
+    /** For date markets: the event date that determines resolution. */
+    eventDate: ts("event_date"),
+    /** For multi-winner markets: array of winning wedge ids. */
+    winningWedgeIds: jsonb("winning_wedge_ids").$type<string[] | null>(),
     status: reviewStatusEnum("status").notNull().default("pending"),
     reviewerId: uuid("reviewer_id").references(() => users.id),
     /** Private note from the reviewing Cheesemonger. */
