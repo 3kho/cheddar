@@ -78,8 +78,13 @@ export async function undoTrade(
     const filledByOrder = new Map(filledRows.rows.map((r) => [r.order_id, r.filled]));
 
     // Per-order target locked state and the delta from current DB state.
+    // Cancelled orders are left as-is — they shouldn't be relocked just because a fill is undone.
     const orderTarget = new Map<string, { remaining: number; lockedTicks: number; lockedShares: number; lockedDelta: number; lockedSharesDelta: number }>();
     for (const order of orderRows) {
+      if (order.status === "cancelled") {
+        orderTarget.set(order.id, { remaining: order.remaining, lockedTicks: 0, lockedShares: 0, lockedDelta: 0, lockedSharesDelta: 0 });
+        continue;
+      }
       const filled = filledByOrder.get(order.id) ?? 0;
       const remaining = Math.max(0, order.qty - filled);
       const targetLockedTicks = order.side === "BUY" ? order.price * remaining : 0;
@@ -161,7 +166,9 @@ export async function undoTrade(
     await tx.update(trades).set({ undoneAt: now, undoneBy: input.actorId }).where(eq(trades.id, trade.id));
 
     // Restore every order touched by the reversed trade to its target state.
+    // Cancelled orders are left untouched.
     for (const order of orderRows) {
+      if (order.status === "cancelled") continue;
       const target = orderTarget.get(order.id)!;
       const filledNow = target.remaining === 0;
       await tx
