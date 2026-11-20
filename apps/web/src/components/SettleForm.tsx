@@ -115,9 +115,11 @@ export function SettleForm({
                     setChoice("all_yes");
                     setWinningWedgeIds([]);
                   }}
-                  aria-pressed={choice === "all_yes"}
+                  aria-pressed={choice === "all_yes" && winningWedgeIds.length === 0}
                   className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                    choice === "all_yes" ? "border-primary bg-primary-soft text-ink" : "border-line hover:bg-hover"
+                    choice === "all_yes" && winningWedgeIds.length === 0
+                      ? "border-primary bg-primary-soft text-ink"
+                      : "border-line hover:bg-hover"
                   }`}
                 >
                   All dates: event didn't happen (all NO)
@@ -128,8 +130,11 @@ export function SettleForm({
                     setChoice("all_yes");
                     setWinningWedgeIds(wedges.map((w) => w.id));
                   }}
+                  aria-pressed={choice === "all_yes" && winningWedgeIds.length === wedges.length}
                   className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                    choice === "all_yes_dates" ? "border-primary bg-primary-soft text-ink" : "border-line hover:bg-hover"
+                    choice === "all_yes" && winningWedgeIds.length === wedges.length
+                      ? "border-primary bg-primary-soft text-ink"
+                      : "border-line hover:bg-hover"
                   }`}
                 >
                   All dates: event happened by each date (all YES)
@@ -171,32 +176,46 @@ export function SettleForm({
 
         {/* Date market: event date picker */}
         {isDateMarket && (
-          <fieldset>
+          <fieldset className="space-y-3">
             <legend className="mb-2 text-sm font-semibold">Event date & time</legend>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-muted">Event happened at</span>
                 <input
                   type="datetime-local"
                   value={eventDate}
                   onChange={(e) => setEventDate(e.target.value)}
                   placeholder="Pick when the event happened"
-                  className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none transition focus:border-primary focus:bg-bg"
+                  className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none transition focus:border-primary focus:bg-bg min-w-[200px]"
                 />
-                <span className="text-xs text-muted">ET</span>
               </label>
-              <p className="text-xs text-muted">
-                Wedges with dates on/after this become Yes; earlier dates become No.
+              <p className="text-xs text-muted leading-none">
+                Wedges dated on/after this resolve Yes; earlier dates resolve No.
               </p>
             </div>
-            <div className="flex flex-wrap items-start gap-4 mt-2 text-sm">
+            <div className="flex flex-wrap items-start gap-4 mt-1 text-sm border-t border-line pt-3">
               {wedges.map((w) => {
                 const date = w.dateValue ? new Date(w.dateValue) : null;
                 const willBeYes = eventDate && date ? date >= new Date(eventDate) : false;
+                const isManuallySelected = winningWedgeIds.includes(w.id);
+                const isYes = isManuallySelected || willBeYes;
                 return (
                   <div key={w.id} className="flex items-center gap-2">
-                    <span className={`text-xs font-semibold ${willBeYes ? "text-yes" : "text-no"}`}>
-                      {willBeYes ? "Yes" : "No"}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toggleWedge(w.id);
+                        if (isDateMarket) setChoice("all_yes");
+                      }}
+                      aria-pressed={isManuallySelected}
+                      className={`rounded-lg border border-line px-2 py-1 text-xs font-semibold transition-colors ${
+                        isYes
+                          ? "bg-yes-soft text-yes hover:bg-yes-soft-hover"
+                          : "bg-surface-2 text-no hover:bg-no-soft"
+                      }`}
+                    >
+                      {isYes ? "Yes" : "No"}
+                    </button>
                     <span className="text-xs text-truncate max-w-[200px]">{w.label}</span>
                     {w.dateValue && <span className="text-xs text-muted">· {formatDateEst(w.dateValue)}</span>}
                   </div>
@@ -263,7 +282,7 @@ export function SettleForm({
                     wheelId,
                     choice,
                     winningWedgeIds:
-                      choice === "multi_yes" && !isDateMarket
+                      (choice === "multi_yes" || isDateMarket) && winningWedgeIds.length > 0
                         ? winningWedgeIds.map((id) => `wedge:${id}`).join(",")
                         : undefined,
                     eventDate: isDateMarket ? eventDate : undefined,

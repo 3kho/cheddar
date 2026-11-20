@@ -123,7 +123,10 @@ export function ProposeForm({
   const [preset, setPreset] = useState<Preset>(initial?.closesAt ? "custom" : "1w");
   const [custom, setCustom] = useState(initial?.closesAt ? toLocalInput(new Date(initial.closesAt)) : "");
   const [allowAdditions, setAllowAdditions] = useState(initial?.allowAdditions ?? false);
-  const [dateValues, setDateValues] = useState<string[]>(isWheel ? (initial?.dateValues ?? []).filter(Boolean) : []);
+  const [dateValues, setDateValues] = useState<string[]>(() => {
+    if (isWheel) return existing.map((w) => w.dateValue ?? "");
+    return (initial?.dateValues ?? []).filter(Boolean);
+  });
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, start] = useTransition();
 
@@ -337,9 +340,12 @@ export function ProposeForm({
                       value={w.dateValue ?? ""}
                       onChange={(e) => {
                         const idx = existing.findIndex((x) => x.id === w.id);
-                        setDateValues((vals) =>
-                          vals.map((v, j) => (j === idx ? e.target.value : v)),
-                        );
+                        setDateValues((vals) => {
+                          const next = [...vals];
+                          while (next.length <= idx) next.push("");
+                          next[idx] = e.target.value;
+                          return next;
+                        });
                       }}
                       className={`${field} h-10 ml-2 w-[170px]`}
                     />
@@ -559,7 +565,7 @@ export function ProposeForm({
                   role="radio"
                   aria-checked={preset === "custom"}
                   onClick={() => {
-                    if (!custom) setCustom(toLocalInput(closeDate ?? new Date(Date.now() + 7 * 86_400_000)));
+                    if (!custom) setCustom(toLocalInput(new Date(Date.now() + 7 * 86_400_000)));
                     setPreset("custom");
                   }}
                   className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold ${

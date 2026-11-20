@@ -80,11 +80,12 @@ export async function proposeSettlement(db: AnyDb, input: ProposeSettlementInput
     }
 
     if (input.outcome === "date" && input.eventDate) {
-      const eventDt = new Date(input.eventDate);
-      const winningWedgeIds = ws
-        .filter((w) => w.dateValue && new Date(w.dateValue) >= eventDt)
-        .map((w) => w.id);
-      input.winningWedgeIds = winningWedgeIds;
+      if (!input.winningWedgeIds) {
+        const eventDt = new Date(input.eventDate);
+        input.winningWedgeIds = ws
+          .filter((w) => w.dateValue && new Date(w.dateValue) >= eventDt)
+          .map((w) => w.id);
+      }
     }
 
     const [s] = await tx
@@ -195,8 +196,12 @@ export async function approveSettlement(
       if (s.outcome === "moldy") {
         result = "moldy";
       } else if (s.outcome === "date") {
-        // Date market: YES if date_value >= event_date, NO otherwise
-        result = w.dateValue && eventDate && new Date(w.dateValue) >= eventDate ? "resolved_yes" : "resolved_no";
+        // Date market: use explicit winningWedgeIds if provided, otherwise fall back to event_date comparison
+        if (s.winningWedgeIds && s.winningWedgeIds.length > 0) {
+          result = winningWedgeIds.has(w.id) ? "resolved_yes" : "resolved_no";
+        } else {
+          result = w.dateValue && eventDate && new Date(w.dateValue) >= eventDate ? "resolved_yes" : "resolved_no";
+        }
       } else if (s.outcome === "wedge_wins") {
         result = w.id === s.winningWedgeId ? "resolved_yes" : "resolved_no";
       } else if (s.outcome === "all_yes") {
