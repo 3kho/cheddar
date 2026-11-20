@@ -575,12 +575,14 @@ export async function proposeSettlementAction(input: {
       outcome = "all_yes";
     } else if (input.choice === "moldy") {
       outcome = "moldy";
+    } else if (input.choice === "multi_yes") {
+      outcome = "multi_yes";
     } else {
       return fail("Pick an outcome.");
     }
 
     // Parse multi-winner wedge ids
-    if (input.winningWedgeIds) {
+    if (input.winningWedgeIds && input.choice === "multi_yes") {
       winningWedgeIds = input.winningWedgeIds
         .split(",")
         .map((id) => id.trim())

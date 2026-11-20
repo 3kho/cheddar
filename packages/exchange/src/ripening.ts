@@ -23,7 +23,7 @@ import { ensureMouse } from "./churn";
 import { repayHouse } from "./house";
 import { assertReviewer, requireText, type ReviewOptions } from "./review";
 
-export type SettlementOutcome = "wedge_wins" | "all_no" | "all_yes" | "moldy" | "date";
+export type SettlementOutcome = "wedge_wins" | "all_no" | "all_yes" | "moldy" | "date" | "multi_yes";
 
 export interface ProposeSettlementInput {
   wheelId: string;
@@ -200,9 +200,11 @@ export async function approveSettlement(
       } else if (s.outcome === "wedge_wins") {
         result = w.id === s.winningWedgeId ? "resolved_yes" : "resolved_no";
       } else if (s.outcome === "all_yes") {
-        result = winningWedgeIds.has(w.id) ? "resolved_yes" : "resolved_no";
+        result = "resolved_yes";
       } else if (s.outcome === "all_no") {
         result = "resolved_no";
+      } else if (s.outcome === "multi_yes") {
+        result = winningWedgeIds.has(w.id) ? "resolved_yes" : "resolved_no";
       } else {
         throw new ExchangeError("INVALID", `unknown settlement outcome ${s.outcome}`);
       }

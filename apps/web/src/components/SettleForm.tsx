@@ -51,6 +51,23 @@ export function SettleForm({
 
   const isSelected = (wedgeId: string) => winningWedgeIds.includes(wedgeId);
 
+  /** Select a settlement outcome. For non-date, non-binary wedges this toggles
+   *  the wedge into/out of the multi_yes winning set. */
+  const handleOutcomeSelect = (o: { value: string; label: string }) => {
+    if (!binary && !isDateMarket && o.value.startsWith("wedge:")) {
+      const wedgeId = o.value.slice("wedge:".length);
+      const isCurrentlySelected = winningWedgeIds.includes(wedgeId);
+      const nextIds = isCurrentlySelected
+        ? winningWedgeIds.filter((id) => id !== wedgeId)
+        : [...winningWedgeIds, wedgeId];
+      setWinningWedgeIds(nextIds);
+      setChoice(nextIds.length > 0 ? "multi_yes" : "");
+    } else {
+      setChoice(o.value);
+      if (o.value !== "all_yes") setWinningWedgeIds([]);
+    }
+  };
+
   const wedgeLabelWithDate = (w: { id: string; label: string; dateValue: string | null }) => {
     const label = w.label;
     const datePart = w.dateValue ? ` · ${formatDateEst(w.dateValue)}` : "";
@@ -71,23 +88,25 @@ export function SettleForm({
           <legend className="mb-2 text-sm font-semibold">What happened?</legend>
           <div className="flex flex-wrap gap-2">
             {/* Standard outcome options */}
-            {[...options, { value: "moldy", label: "Void it (Moldy, 50/50)" }].map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => {
-                  setChoice(o.value);
-                  if (o.value !== "all_yes") setWinningWedgeIds([]);
-                }}
-                aria-pressed={choice === o.value}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  choice === o.value ? "border-primary bg-primary-soft text-ink" : "border-line hover:bg-hover"
-                }`}
-              >
-                {o.value === "moldy" && <MoldIcon size={14} />}
-                {o.label}
-              </button>
-            ))}
+            {[...options, { value: "moldy", label: "Void it (Moldy, 50/50)" }].map((o) => {
+              const isWedgeToggle = !binary && !isDateMarket && o.value.startsWith("wedge:");
+              const wedgeId = isWedgeToggle ? o.value.slice("wedge:".length) : null;
+              const isPressed = isWedgeToggle ? isSelected(wedgeId!) : choice === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => handleOutcomeSelect(o)}
+                  aria-pressed={isPressed}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    isPressed ? "border-primary bg-primary-soft text-ink" : "border-line hover:bg-hover"
+                  }`}
+                >
+                  {o.value === "moldy" && <MoldIcon size={14} />}
+                  {o.label}
+                </button>
+              );
+            })}
             {isDateMarket && (
               <>
                 <button
@@ -235,7 +254,7 @@ export function SettleForm({
               !evidence.trim() ||
               pending ||
               (isDateMarket && !eventDate) ||
-              (choice === "all_yes" && !isDateMarket && winningWedgeIds.length === 0)
+              (choice === "multi_yes" && !isDateMarket && winningWedgeIds.length === 0)
             }
             onClick={() =>
               start(async () => {
@@ -244,7 +263,7 @@ export function SettleForm({
                     wheelId,
                     choice,
                     winningWedgeIds:
-                      choice === "all_yes" && !isDateMarket
+                      choice === "multi_yes" && !isDateMarket
                         ? winningWedgeIds.map((id) => `wedge:${id}`).join(",")
                         : undefined,
                     eventDate: isDateMarket ? eventDate : undefined,

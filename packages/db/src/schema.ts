@@ -91,7 +91,7 @@ export const wedgeStatusEnum = pgEnum("wedge_status", [
 /** wedge_wins: the named wedge resolves YES and every other wedge NO.
  *  all_no:     every wedge resolves NO (only valid for single-wedge / binary wheels).
  *  moldy:      the wheel is voided. */
-export const settlementOutcomeEnum = pgEnum("settlement_outcome", ["wedge_wins", "all_no", "all_yes", "moldy", "date"]);
+export const settlementOutcomeEnum = pgEnum("settlement_outcome", ["wedge_wins", "all_no", "all_yes", "moldy", "date", "multi_yes"]);
 export const churnStatusEnum = pgEnum("churn_status", ["credited", "no_change", "skipped_untrusted", "error"]);
 export const oauthProviderEnum = pgEnum("oauth_provider", ["hca", "hackatime"]);
 
