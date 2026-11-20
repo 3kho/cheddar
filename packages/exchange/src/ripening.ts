@@ -75,8 +75,8 @@ export async function proposeSettlement(db: AnyDb, input: ProposeSettlementInput
       }
     }
 
-    if (input.outcome === "all_yes" || input.outcome === "all_no") {
-      if (ws.length <= 1) throw new ExchangeError("INVALID", "all_yes/all_no requires multiple outcomes");
+    if (input.outcome === "all_yes") {
+      if (ws.length <= 1) throw new ExchangeError("INVALID", "all_yes requires multiple outcomes");
     }
 
     if (input.outcome === "date" && input.eventDate) {
