@@ -22,6 +22,7 @@ import { TradePanel, type TradeWedge } from "@/components/TradePanel";
 import { WheelStatus, resolvedLabel } from "@/components/WheelCard";
 import { cancelOrderAction, haltPassedDateWedgesAction, haltWedgeAction, undoTradeAction } from "@/lib/actions";
 import { formatChance, formatDate, formatDateEst, formatLatta, formatShares, timeAgo } from "@/lib/format";
+import { marketEmbedState } from "@/lib/market-embed";
 import { bestPrice } from "@/lib/market";
 import {
   balancesOf,
@@ -40,12 +41,13 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const data = await getWheel((await params).slug);
   if (!data) return { title: "Cheddar" };
-  const blurb = (data.wheel.description ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
-  const description = blurb || `Trade on “${data.wheel.title}” with Latta Cheese on Cheddar, Hack Club's play-money prediction market.`;
+  const state = marketEmbedState(data.wheel, data.settlement?.status === "pending");
+  const blurb = (data.wheel.description ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+  const description = blurb ? `${state.description}. ${blurb}` : `${state.description}. Trade it on Cheddar.`;
   return {
     title: `${data.wheel.title} · Cheddar`,
     description,
-    // The card image comes from this folder's opengraph-image.tsx (the wheel's own picture).
+    // The card image comes from this folder's opengraph-image.tsx (chance, volume, status).
     openGraph: { title: data.wheel.title, description },
     twitter: { card: "summary_large_image" as const, title: data.wheel.title, description },
   };
