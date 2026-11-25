@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { runSlackResync } from "@/lib/slack-resync-job";
 
 export async function GET(req: NextRequest) {
