@@ -74,11 +74,22 @@ export function TradePanel({
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, start] = useTransition();
 
+  const [done, setDone] = useState(false);
+
   useEffect(() => setOutcome(initialOutcome), [initialOutcome, wedgeId]);
   useEffect(() => {
     setResult(null);
     setPrice("");
   }, [wedgeId, outcome, side]);
+  useEffect(() => {
+    if (!result?.ok) {
+      setDone(false);
+      return;
+    }
+    setDone(true);
+    const t = window.setTimeout(() => setDone(false), 1400);
+    return () => window.clearTimeout(t);
+  }, [result]);
 
   const wedge = wedges.find((w) => w.id === wedgeId) ?? wedges[0]!;
   const allLevels = levelsFor(wedge.depth, outcome, side);
@@ -196,7 +207,7 @@ export function TradePanel({
 
   return (
     <div>
-      <div className="flex flex-col gap-5 rounded-xl bg-surface p-4 shadow-mid">
+      <div className="trade-dock flex flex-col gap-5 rounded-xl bg-surface p-4 shadow-mid">
         {/* What you're trading */}
         <div className="flex items-center gap-3">
           <WheelIcon icon={icon} category={category} size={48} />
@@ -427,11 +438,19 @@ export function TradePanel({
           </div>
         ) : (
           <button
+            type="button"
             onClick={submit}
-            disabled={!canSubmit || pending}
-            className="btn-3d flex h-12 w-full items-center justify-center bg-primary text-base font-bold text-white hover:opacity-90 disabled:opacity-50"
+            disabled={!canSubmit || pending || done}
+            data-tone={side === "SELL" ? "sell" : outcome === "NO" ? "no" : "yes"}
+            data-done={done ? "true" : "false"}
+            data-pending={pending ? "true" : "false"}
+            aria-label={done ? "Order placed" : undefined}
+            className="trade-go"
           >
-            {pending ? "Placing…" : `${side === "BUY" ? "Buy" : "Sell"} ${outcomeName(outcome)}`}
+            <span className="trade-go-label">{pending ? "Placing…" : `${side === "BUY" ? "Buy" : "Sell"} ${outcomeName(outcome)}`}</span>
+            <svg className="trade-go-check" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 12.5 9.2 17 19 7" />
+            </svg>
           </button>
         )}
         {result && (
