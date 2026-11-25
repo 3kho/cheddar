@@ -13,6 +13,7 @@ import { LinkedActions } from "@/components/LinkedActions";
 import { Linkified } from "@/components/Linkified";
 import { Avatar, WheelIcon } from "@/components/Logo";
 import { OrderBookView } from "@/components/OrderBookView";
+import { PositionCard, type PositionLine } from "@/components/PositionCard";
 import { PriceChart, type Series } from "@/components/PriceChart";
 import { SettleForm } from "@/components/SettleForm";
 import { SuggestOutcome } from "@/components/SuggestOutcome";
@@ -103,6 +104,7 @@ export default async function WheelPage({
   const pos = new Map(mine.positions.map((p) => [p.wedgeId, p]));
   const labelOf = (id: string | null) => wheel.wedges.find((w) => w.id === id)?.label ?? "";
 
+  const positionLines: PositionLine[] = [];
   const tradeWedges: TradeWedge[] = wheel.wedges.map((w) => {
     const p = pos.get(w.id);
     return {
@@ -117,6 +119,28 @@ export default async function WheelPage({
       costNo: heldCost(w.id, "NO", p?.noShares ?? 0),
     };
   });
+  for (const t of tradeWedges) {
+    const chance = wheel.wedges.find((w) => w.id === t.id)?.chance ?? null;
+    const prefix = binary ? "" : `${t.label} · `;
+    if (t.heldYes > 0) {
+      positionLines.push({
+        key: `${t.id}:YES`,
+        label: `${prefix}Yes`,
+        shares: t.heldYes,
+        investedTicks: t.costYes,
+        valueTicks: chance == null ? null : t.heldYes * chance,
+      });
+    }
+    if (t.heldNo > 0) {
+      positionLines.push({
+        key: `${t.id}:NO`,
+        label: `${prefix}No`,
+        shares: t.heldNo,
+        investedTicks: t.costNo,
+        valueTicks: chance == null ? null : t.heldNo * (100 - chance),
+      });
+    }
+  }
 
   const tradable = wheel.status === "open" && (!wheel.closesAt || wheel.closesAt > new Date());
   const gate = !user
@@ -643,6 +667,7 @@ export default async function WheelPage({
       </div>
 
       <aside className="space-y-8 lg:sticky lg:top-[129px] lg:self-start">
+        {user && <PositionCard lines={positionLines} />}
         <div id="trade" className="scroll-mt-32">
           <TradePanel
             wedges={tradeWedges}
