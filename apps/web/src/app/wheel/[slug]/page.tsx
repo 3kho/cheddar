@@ -541,7 +541,7 @@ export default async function WheelPage({
         )}
 
         {!done && (
-          <details open className="group/ob rounded-xl bg-surface shadow-mid">
+          <details className="group/ob rounded-xl bg-surface shadow-mid">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl p-4 hover:bg-hover [&::-webkit-details-marker]:hidden">
               <span className="text-base font-semibold">
                 Order Book{!binary && <span className="font-medium text-muted"> · {selected.label}</span>}
