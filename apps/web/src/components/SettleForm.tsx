@@ -8,6 +8,7 @@ import { proposeSettlementAction, type ActionResult } from "@/lib/actions";
 import { Notice } from "./ActionButton";
 import { ChevronDownIcon, MoldIcon } from "./Icons";
 import { formatDateEst } from "@/lib/format";
+import { matchDate, outcomeMatchesEvent } from "@/lib/market-dates";
 
 /**
  * Asking to close a wheel: the creator (or a Cheesemonger) says how it came out and why.
@@ -28,8 +29,17 @@ export function SettleForm({
   const binary = wedges.length === 1;
   const isDateMarket = marketType === "date";
   const [choice, setChoice] = useState("");
-  /** For date markets: the ISO date/time string of the event. */
-  const [eventDate, setEventDate] = useState("");
+  /** For date markets: what the maker typed. A match selects Yes/No on each date. */
+  const [eventText, setEventText] = useState("");
+  /** Wedge ids the maker flipped by hand. Null means use the automatic match. */
+  const [manualYes, setManualYes] = useState<string[] | null>(null);
+  const eventMatch = matchDate(eventText);
+  const autoYesIds = eventMatch
+    ? wedges.filter((w) => outcomeMatchesEvent(w.dateValue, eventMatch.date) === true).map((w) => w.id)
+    : [];
+  const yesIds = manualYes ?? autoYesIds;
+  const yesCount = yesIds.length;
+  const dateSettle = isDateMarket && !!eventMatch && choice === "";
   /** For multi-winner markets: selected winning wedge ids. */
   const [winningWedgeIds, setWinningWedgeIds] = useState<string[]>([]);
   const [evidence, setEvidence] = useState("");
@@ -174,49 +184,53 @@ export function SettleForm({
           </div>
         </fieldset>
 
-        {/* Date market: event date picker */}
+        {/* Date market: type when it happened and the outcomes match themselves. */}
         {isDateMarket && (
           <fieldset className="space-y-3">
-            <legend className="mb-2 text-sm font-semibold">Event date & time</legend>
-            <div className="flex items-center gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted">Event happened at</span>
-                <input
-                  type="datetime-local"
-                  value={eventDate}
-                  onChange={(e) => setEventDate(e.target.value)}
-                  placeholder="Pick when the event happened"
-                  className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none transition focus:border-primary focus:bg-bg min-w-[200px]"
-                />
-              </label>
-              <p className="text-xs text-muted leading-none">
-                Wedges dated on/after this resolve Yes; earlier dates resolve No.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-start gap-4 mt-1 text-sm border-t border-line pt-3">
+            <legend className="mb-2 text-sm font-semibold">When did it happen?</legend>
+            <label className="block max-w-sm">
+              <input
+                value={eventText}
+                onChange={(e) => {
+                  setEventText(e.target.value);
+                  setManualYes(null);
+                  setChoice("");
+                }}
+                placeholder="March 15, or end of June"
+                aria-label="Event date"
+                className="h-10 w-full rounded-lg border border-line bg-surface-2 px-3 text-sm outline-none transition focus:border-primary focus:bg-bg"
+              />
+            </label>
+            <p className={`text-xs ${eventText.trim() && !eventMatch ? "text-no" : "text-muted"}`}>
+              {eventMatch
+                ? `Matches ${eventMatch.when}. A date on or after that resolves Yes. ${yesCount} Yes, ${wedges.length - yesCount} No.`
+                : eventText.trim()
+                  ? "No date matched. Try “March 15” or “June 30, 2027 3pm”."
+                  : "Type the event date. Each outcome is matched for you, at 11:59 PM ET unless you add a time."}
+            </p>
+            <div className="flex flex-wrap items-start gap-4 border-t border-line pt-3 text-sm">
               {wedges.map((w) => {
-                const date = w.dateValue ? new Date(w.dateValue) : null;
-                const willBeYes = eventDate && date ? date >= new Date(eventDate) : false;
-                const isManuallySelected = winningWedgeIds.includes(w.id);
-                const isYes = isManuallySelected || willBeYes;
+                const auto = eventMatch ? outcomeMatchesEvent(w.dateValue, eventMatch.date) === true : false;
+                const isYes = !eventMatch ? null : manualYes ? manualYes.includes(w.id) : auto;
                 return (
                   <div key={w.id} className="flex items-center gap-2">
                     <button
                       type="button"
+                      disabled={!eventMatch}
                       onClick={() => {
-                        toggleWedge(w.id);
-                        if (isDateMarket) setChoice("all_yes");
+                        if (!eventMatch) return;
+                        const current = manualYes ?? autoYesIds;
+                        setManualYes(current.includes(w.id) ? current.filter((id) => id !== w.id) : [...current, w.id]);
+                        setChoice("");
                       }}
-                      aria-pressed={isManuallySelected}
-                      className={`rounded-lg border border-line px-2 py-1 text-xs font-semibold transition-colors ${
-                        isYes
-                          ? "bg-yes-soft text-yes hover:bg-yes-soft-hover"
-                          : "bg-surface-2 text-no hover:bg-no-soft"
+                      aria-pressed={isYes === true}
+                      className={`rounded-lg border border-line px-2 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
+                        isYes == null ? "bg-surface-2 text-muted" : isYes ? "bg-yes-soft text-yes hover:bg-yes-soft-hover" : "bg-surface-2 text-no hover:bg-no-soft"
                       }`}
                     >
-                      {isYes ? "Yes" : "No"}
+                      {isYes == null ? "—" : isYes ? "Yes" : "No"}
                     </button>
-                    <span className="text-xs text-truncate max-w-[200px]">{w.label}</span>
+                    <span className="max-w-[200px] truncate text-xs">{w.label}</span>
                     {w.dateValue && <span className="text-xs text-muted">· {formatDateEst(w.dateValue)}</span>}
                   </div>
                 );
@@ -269,23 +283,22 @@ export function SettleForm({
           <button
             type="button"
             disabled={
-              !choice ||
               !evidence.trim() ||
               pending ||
-              (isDateMarket && !eventDate) ||
-              (choice === "multi_yes" && !isDateMarket && winningWedgeIds.length === 0)
+              (isDateMarket ? !dateSettle && !choice : !choice || (choice === "multi_yes" && winningWedgeIds.length === 0))
             }
             onClick={() =>
               start(async () => {
                 const r = await safely(
                   proposeSettlementAction({
                     wheelId,
-                    choice,
-                    winningWedgeIds:
-                      (choice === "multi_yes" || isDateMarket) && winningWedgeIds.length > 0
+                    choice: dateSettle ? `date:${eventMatch!.date.toISOString()}` : choice,
+                    winningWedgeIds: dateSettle && manualYes
+                      ? manualYes.map((id) => `wedge:${id}`).join(",")
+                      : choice === "multi_yes" && winningWedgeIds.length > 0
                         ? winningWedgeIds.map((id) => `wedge:${id}`).join(",")
                         : undefined,
-                    eventDate: isDateMarket ? eventDate : undefined,
+                    eventDate: dateSettle ? eventMatch!.date.toISOString() : undefined,
                     evidence,
                   }),
                 );
