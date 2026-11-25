@@ -308,7 +308,7 @@ async function SettlementsTab({ me }: { me: SessionUser }) {
             <ReviewButtons
               action={reviewSettlementAction.bind(null, s.id)}
               approveConsequence={`${result}. Pays ${formatLatta(preview.paidTicks)} to ${preview.holders} holder${preview.holders === 1 ? "" : "s"} and closes the wheel for good. This can't be undone.`}
-              rejectConsequence="The request is thrown out and trading reopens. The wheel can be closed again later."
+              rejectConsequence="The request is thrown out. Trading stays open, and the wheel can be closed again later."
               noteLabel="Private note (Cheesemongers' log only)"
               proof={{
                 label: "Proof",

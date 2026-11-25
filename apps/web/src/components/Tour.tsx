@@ -192,8 +192,8 @@ function MockTabs() {
 function Timeline() {
   const steps: [string, string][] = [
     ["Open", "People trade. Prices move."],
-    ["Closed", "The deadline passes, or someone asks to close it."],
-    ["Ripening", "A Cheesemonger checks the proof for the result."],
+    ["Proposed", "Someone names an outcome. A banner shows it, and trading stays open."],
+    ["Review", "Cheesemongers check that proposal. Nothing closes until they agree."],
     ["Paid out", "Winning shares pay 1 Lc each. Losing shares pay 0."],
   ];
   return (

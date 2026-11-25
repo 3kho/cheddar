@@ -262,8 +262,8 @@ export function SettleForm({
           />
         </label>
         <p className="text-xs text-muted">
-          Trading pauses as soon as you send this. A Cheesemonger checks it: if they agree the wheel ripens and pays
-          out, otherwise trading reopens.
+          Trading stays open after you send this. A Cheesemonger checks it: if they agree, the wheel closes and pays
+          out. If they don&apos;t, the proposal is dropped and nothing else changes.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button

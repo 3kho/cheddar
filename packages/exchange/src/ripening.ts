@@ -2,8 +2,10 @@
  * Ripening: resolving a Wheel.
  *
  *   1. The Wheel's creator (or a Cheesemonger) proposes a settlement with evidence.
- *      Trading on every Wedge halts immediately.
- *   2. A Cheesemonger approves it (payout) or rejects it (trading reopens).
+ *      Trading stays open. The market only shows that an outcome was proposed.
+ *   2. A Cheesemonger approves it (trading stops, orders cancel, payout) or rejects it
+ *      (the proposal is dropped and trading was never interrupted).
+ *      Wheels already marked ripening from before this rule still halt until review.
  *
  * Payout, per Wedge, in one transaction with the Wedge rows locked:
  *   - cancel every open order and return its escrow,
@@ -88,6 +90,13 @@ export async function proposeSettlement(db: AnyDb, input: ProposeSettlementInput
       }
     }
 
+    const [pending] = await tx
+      .select({ id: settlements.id })
+      .from(settlements)
+      .where(and(eq(settlements.wheelId, wheel.id), eq(settlements.status, "pending")))
+      .limit(1);
+    if (pending) throw new ExchangeError("INVALID", "a settlement is already proposed for this wheel");
+
     const [s] = await tx
       .insert(settlements)
       .values({
@@ -100,11 +109,7 @@ export async function proposeSettlement(db: AnyDb, input: ProposeSettlementInput
         evidence,
       })
       .returning();
-    await tx.update(wheels).set({ status: "ripening" }).where(eq(wheels.id, wheel.id));
-    await tx
-      .update(wedges)
-      .set({ status: "halted" })
-      .where(and(eq(wedges.wheelId, wheel.id), eq(wedges.status, "open")));
+    // The proposal is only a banner. Status and the book stay as they are until approval.
     await logEvent(tx, {
       actorId: input.proposerId,
       action: "settlement.propose",
@@ -146,14 +151,17 @@ export async function rejectSettlement(
       targetId: s.id,
       details: { wheelId: wheel.id, title: wheel.title, slug: wheel.slug, note: input.note ?? null },
     });
-    await tx
-      .update(wheels)
-      .set({ status: wheel.closesAt && wheel.closesAt <= now ? "closed" : "open" })
-      .where(eq(wheels.id, wheel.id));
-    await tx
-      .update(wedges)
-      .set({ status: "open" })
-      .where(and(eq(wedges.wheelId, wheel.id), eq(wedges.status, "halted")));
+    // New proposals never take the wheel off the board. Older ripening wheels were halted on propose.
+    if (wheel.status === "ripening") {
+      await tx
+        .update(wheels)
+        .set({ status: wheel.closesAt && wheel.closesAt <= now ? "closed" : "open" })
+        .where(eq(wheels.id, wheel.id));
+      await tx
+        .update(wedges)
+        .set({ status: "open" })
+        .where(and(eq(wedges.wheelId, wheel.id), eq(wedges.status, "halted")));
+    }
   });
 }
 
@@ -183,7 +191,9 @@ export async function approveSettlement(
     const s = await lockPendingSettlement(tx, input.settlementId);
     await assertReviewer(tx, input.reviewerId, s.proposerId, opts);
     const wheel = await lockWheel(tx, s.wheelId);
-    if (wheel.status !== "ripening") throw new ExchangeError("INVALID", `this wheel is ${wheel.status}`);
+    if (wheel.status !== "open" && wheel.status !== "closed" && wheel.status !== "ripening") {
+      throw new ExchangeError("INVALID", `this wheel is ${wheel.status}`);
+    }
     const ws = await lockWedges(tx, wheel.id);
 
     // Determine per-wedge results

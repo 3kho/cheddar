@@ -114,13 +114,14 @@ describe("The Mouse market maker", () => {
     expect(after[1]!.asks[0]![0]).toBeLessThan(before[1]!.asks[0]![0]);
   });
 
-  it("pulls its quotes when the wheel is ripening and settles cleanly", async () => {
+  it("keeps quoting after a proposed outcome and settles cleanly when approved", async () => {
     const { monger, trader, mouse, wheel, wedges } = await setup(["A", "B"]);
     await ex.placeOrder({ userId: trader.id, wedgeId: wedges[0]!.id, outcome: "YES", side: "BUY", price: 99, qty: 100, tif: "IOC" });
     const s = await proposeSettlement(db, { wheelId: wheel.id, proposerId: monger.id, outcome: "wedge_wins", winningWedgeId: wedges[0]!.id, evidence: "x" });
     await requoteWheel(db, ex, wheel.id);
-    expect(await mouseOrders(mouse.id)).toHaveLength(0);
+    expect((await mouseOrders(mouse.id)).length).toBeGreaterThan(0);
     await approveSettlement(db, { settlementId: s.id, reviewerId: monger.id, proof: "it happened" }, { allowSelfReview: true });
+    expect(await mouseOrders(mouse.id)).toHaveLength(0);
   });
 });
 
