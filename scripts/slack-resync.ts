@@ -54,13 +54,12 @@ async function fetchCurrentMembers(): Promise<string[]> {
 }
 
 // ---------------------------------------------------
-// 5️⃣  Helper: get all active app users (exclude bots)
+// 5️⃣  Helper: get all app users (including bots)
 // ---------------------------------------------------
 async function fetchAppUsers(): Promise<string[]> {
   const result = await db
     .select({ id: users.id })
-    .from(users)
-    .where(sql`${users.isBot} = false`);
+    .from(users);
   return result.map((r) => r.id.toString());
 }
 
