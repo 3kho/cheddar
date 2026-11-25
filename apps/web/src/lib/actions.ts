@@ -582,7 +582,7 @@ export async function proposeSettlementAction(input: {
     }
 
     // Parse multi-winner wedge ids
-    if (input.winningWedgeIds && input.choice === "multi_yes") {
+    if (input.winningWedgeIds != null && (outcome === "multi_yes" || outcome === "date")) {
       winningWedgeIds = input.winningWedgeIds
         .split(",")
         .map((id) => id.trim())
