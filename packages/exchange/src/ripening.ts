@@ -77,6 +77,10 @@ export async function proposeSettlement(db: AnyDb, input: ProposeSettlementInput
       }
     }
 
+    if (input.outcome === "all_no" && ws.length !== 1) {
+      throw new ExchangeError("INVALID", "all_no is only for a yes/no wheel");
+    }
+
     if (input.outcome === "all_yes") {
       if (ws.length <= 1) throw new ExchangeError("INVALID", "all_yes requires multiple outcomes");
     }
