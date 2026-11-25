@@ -54,6 +54,29 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 /** Colours for the two sides of a 2-outcome wheel. */
 const PAIR = ["var(--chart-1)", "var(--chart-4)"];
 
+/** Plain-language name of a pending settlement, for the banner on the wheel. */
+function proposedOutcomeLabel(
+  settlement: { outcome: string; winningWedgeId: string | null; winningWedgeIds: string[] | null; eventDate: Date | null },
+  wedges: { id: string; label: string }[],
+): string {
+  const name = (id: string | null | undefined) => wedges.find((w) => w.id === id)?.label;
+  if (settlement.outcome === "moldy") return "voiding it, so every share would pay 0.50 Lc";
+  if (settlement.outcome === "all_no") return "No";
+  if (settlement.outcome === "all_yes") return "Yes on every outcome";
+  if (settlement.outcome === "wedge_wins") {
+    const label = name(settlement.winningWedgeId);
+    return label ? `“${label}” as the winner` : "a winner";
+  }
+  if (settlement.outcome === "multi_yes") {
+    const labels = (settlement.winningWedgeIds ?? []).map((id) => name(id)).filter((x): x is string => !!x);
+    return labels.length ? `${labels.join(", ")} as winners` : "several winners";
+  }
+  if (settlement.outcome === "date") {
+    return settlement.eventDate ? `the event date ${formatDate(settlement.eventDate)}` : "a date";
+  }
+  return "an outcome";
+}
+
 export default async function WheelPage({
   params,
   searchParams,
@@ -392,10 +415,17 @@ export default async function WheelPage({
           <section className="flex items-start gap-3 rounded-xl border border-accent/50 bg-accent-soft p-4 text-sm">
             <CheeseIcon size={20} className="mt-0.5 shrink-0 text-accent" />
             <div>
-              <h2 className="font-semibold">Ripening</h2>
+              <h2 className="font-semibold">Outcome proposed</h2>
               <p className="mt-0.5 text-muted">
-                Someone asked to close this wheel. Trading is paused while the Cheesemongers check the result. If they
-                don&apos;t agree, trading reopens.
+                {settlementProposedBy ?? "Someone"} proposed {proposedOutcomeLabel(settlement, wheel.wedges)}.{" "}
+                {wheel.status === "ripening" ? (
+                  <>Trading is paused while the Cheesemongers check it. If they don&apos;t agree, trading reopens.</>
+                ) : (
+                  <>
+                    Trading stays open while the Cheesemongers check it. If they agree, the wheel closes and pays out.
+                    If they don&apos;t, this proposal is dropped.
+                  </>
+                )}
               </p>
             </div>
           </section>

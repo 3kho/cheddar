@@ -47,6 +47,7 @@ export function mousePrices(
 /**
  * Re-quote The Mouse on every wedge of a wheel. Cancels its quotes when the wheel isn't tradable
  * (paused, ripening, settled, liquidity 0), then repays the house from any spare cash.
+ * A proposed outcome does not change the wheel's status, so quotes stay up until approval.
  */
 export async function requoteWheel(db: AnyDb, exchange: Exchange, wheelId: string) {
   const mouse = await ensureMouse(db);

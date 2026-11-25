@@ -599,9 +599,9 @@ export async function proposeSettlementAction(input: {
       eventDate,
       evidence: input.evidence,
     });
-    after(() => requote(input.wheelId)); // pulls The Mouse's quotes while it ripens
+    after(() => requote(input.wheelId));
     revalidatePath("/", "layout");
-    return { ok: true, message: "Request sent. Trading is paused until a Cheesemonger reviews it." };
+    return { ok: true, message: "Request sent. Trading stays open until a Cheesemonger approves it." };
   });
 }
 
@@ -636,9 +636,9 @@ export async function reviewSettlementAction(
       text: `Your settlement request was rejected.`,
       blocks: settlementRejectedBlocks(note),
     });
-    after(() => requoteAll()); // trading reopened: The Mouse quotes again
+    after(() => requoteAll());
     revalidatePath("/", "layout");
-    return { ok: true, message: "Settlement rejected; trading reopened." };
+    return { ok: true, message: "Settlement rejected. Trading stays open." };
   });
 }
 
