@@ -5,7 +5,6 @@
   "buildCommand": "pnpm --dir ../.. db:migrate && next build",
   "crons": [
     { "path": "/api/cron/churn", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/mouse", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/slack-resync", "schedule": "*/10 * * * *" }
+    { "path": "/api/cron/mouse", "schedule": "0 0 * * *" }
   ]
 }
