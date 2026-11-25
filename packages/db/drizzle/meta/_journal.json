@@ -169,6 +169,13 @@
       "when": 1794850380830,
       "tag": "0023_settlement_multi_yes",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794850381830,
+      "tag": "0024_slack_channel_state",
+      "breakpoints": true
     }
   ]
 }
