@@ -33,3 +33,16 @@ jobs:
           case "$url" in http://*|https://*) ;; *) url="https://$url" ;; esac
           secret="$(printf '%s' "$CRON_SECRET" | tr -d '\r\n')"
           curl -fsS -H "Authorization: Bearer $secret" "$url/api/cron/churn"
+  slack-resync:
+    if: github.event.schedule != '*/5 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Slack resync
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          url="$(printf '%s' "$APP_URL" | tr -d '[:space:]')"; url="${url%/}"
+          case "$url" in http://*|https://*) ;; *) url="https://$url" ;; esac
+          secret="$(printf '%s' "$CRON_SECRET" | tr -d '\r\n')"
+          curl -fsS -H "Authorization: Bearer $secret" "$url/api/cron/slack-resync"
