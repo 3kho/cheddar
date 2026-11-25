@@ -1,1 +1,1 @@
-ALTER TYPE "public"."settlement_outcome" ADD VALUE 'all_yes';--> statement-breakpoint
+ALTER TYPE "public"."settlement_outcome" ADD VALUE IF NOT EXISTS 'all_yes';

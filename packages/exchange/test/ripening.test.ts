@@ -72,8 +72,13 @@ describe("Ripening", () => {
     expect(await collateral(db, w!.id)).toBe(1_000);
 
     const s = await proposeSettlement(db, { wheelId: wheel.id, proposerId: creator.id, outcome: "wedge_wins", winningWedgeId: w!.id, evidence: "it shipped" });
-    // Trading halts while ripening, but cancelling still works.
-    expect(await code(ex.placeOrder({ userId: yes.id, wedgeId: w!.id, outcome: "YES", side: "BUY", price: 99, qty: 1 }))).toBe("MARKET_CLOSED");
+    // A proposal is a banner, not a halt. A new order can rest, and cancelling it still works.
+    const [wh0] = await db.select().from(wheels).where(eq(wheels.id, wheel.id));
+    expect(wh0!.status).toBe("open");
+    const [wedge0] = await db.select().from(wedges).where(eq(wedges.id, w!.id));
+    expect(wedge0!.status).toBe("open");
+    const placed = await ex.placeOrder({ userId: yes.id, wedgeId: w!.id, outcome: "YES", side: "BUY", price: 99, qty: 1 });
+    await ex.cancelOrder(yes.id, placed.orderId);
 
     const report = await approveSettlement(db, { settlementId: s.id, reviewerId: monger.id });
     expect(report).toEqual([{ wedgeId: w!.id, result: "resolved_yes", cancelledOrders: 1, paidTicks: 1_000, holders: 1 }]);
@@ -165,7 +170,7 @@ describe("Ripening", () => {
     expect(await code(proposeSettlement(db, { ...base, outcome: "moldy", evidence: "  " }))).toBe("INVALID");
 
     const s = await proposeSettlement(db, { ...base, proposerId: monger.id, outcome: "wedge_wins", winningWedgeId: w!.id });
-    expect(await code(proposeSettlement(db, { ...base, outcome: "moldy" }))).toBe("INVALID"); // already ripening
+    expect(await code(proposeSettlement(db, { ...base, outcome: "moldy" }))).toBe("INVALID"); // one proposal at a time
     expect(await code(approveSettlement(db, { settlementId: s.id, reviewerId: yes.id }))).toBe("FORBIDDEN");
     expect(await code(approveSettlement(db, { settlementId: s.id, reviewerId: monger.id }))).toBe("FORBIDDEN"); // self-review
     expect(await code(approveSettlement(db, { settlementId: s.id, reviewerId: monger.id }, { allowSelfReview: true }))).toBe("OK");

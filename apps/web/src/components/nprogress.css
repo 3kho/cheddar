@@ -1,0 +1,17 @@
+/* Cheddar accent on the stock nprogress bar. The stylesheet loads after nprogress.css. */
+#nprogress .bar {
+  background: var(--accent);
+  height: 3px;
+  z-index: 80;
+}
+
+#nprogress .peg {
+  box-shadow: 0 0 10px var(--accent), 0 0 5px var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #nprogress .bar,
+  #nprogress .peg {
+    transition: none;
+  }
+}

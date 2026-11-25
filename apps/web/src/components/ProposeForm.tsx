@@ -10,8 +10,19 @@ import {
   type ProposalFormInput,
 } from "@/lib/actions";
 import { safely } from "@/lib/safely";
-import { formatDateEst } from "@/lib/format";
+import {
+  blankDateDraft,
+  dateProblems,
+  datesForSubmit,
+  draftFromStored,
+  formatWhenEt,
+  matchDate,
+  phraseFor,
+  type DateDraft,
+} from "@/lib/market-dates";
+import { fillRuleTemplate, RULE_TEMPLATES, type RuleTemplateId } from "@/lib/rule-templates";
 import { Notice } from "./ActionButton";
+import { DateOutcomes } from "./DateOutcomes";
 import { IconPicker } from "./IconPicker";
 import {
   CalendarIcon,
@@ -46,12 +57,6 @@ export interface ProposeInitial {
   allowAdditions: boolean;
 }
 
-const CRITERIA_TEMPLATE = `Resolves YES if: …
-Source: … (where the answer will be checked, ideally a link)
-Deadline: … (the date and time zone it has to happen by)
-Edge cases: … (what counts, what doesn't)
-Otherwise it resolves NO.`;
-
 /** Gentle nudges that make a question easier to settle. Never blocks submitting. */
 function criteriaTips(text: string): string[] {
   const t = text.toLowerCase();
@@ -76,11 +81,6 @@ const PRESETS = [
 ] as const;
 type Preset = (typeof PRESETS)[number][0] | "custom";
 
-/** A Date as the value a datetime-local input wants (local time, to the minute). */
-function toLocalInput(d: Date): string {
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-}
-
 export function ProposeForm({
   children,
   mode = { kind: "propose" },
@@ -103,12 +103,15 @@ export function ProposeForm({
   const existing = isWheel ? mode.wedges : [];
   const startMulti = isWheel ? existing.length > 1 : (initial?.outcomes.length ?? 0) > 1;
 
+  const startDate = !isWheel && (initial?.dateValues.filter(Boolean).length ?? 0) > 0;
   const [kind, setKind] = useState<"binary" | "multi" | "date">(
     isWheel
       ? (existing.some((w) => w.dateValue) ? "date" : startMulti ? "multi" : "binary")
-      : startMulti
-        ? "multi"
-        : "binary",
+      : startDate
+        ? "date"
+        : startMulti
+          ? "multi"
+          : "binary",
   );
   const [title, setTitle] = useState(initial?.title ?? "");
   const [category, setCategory] = useState(initial?.category ?? CATEGORIES[0] ?? "Hack Club");
@@ -121,12 +124,20 @@ export function ProposeForm({
   const [iconError, setIconError] = useState<string | null>(null);
   const [closes, setCloses] = useState<"request" | "date">(initial?.closesAt ? "date" : "request");
   const [preset, setPreset] = useState<Preset>(initial?.closesAt ? "custom" : "1w");
-  const [custom, setCustom] = useState(initial?.closesAt ? toLocalInput(new Date(initial.closesAt)) : "");
   const [allowAdditions, setAllowAdditions] = useState(initial?.allowAdditions ?? false);
   const [dateValues, setDateValues] = useState<string[]>(() => {
     if (isWheel) return existing.map((w) => w.dateValue ?? "");
     return (initial?.dateValues ?? []).filter(Boolean);
   });
+  const [dateRows, setDateRows] = useState<DateDraft[]>(() => {
+    const isos = (initial?.dateValues ?? []).filter(Boolean);
+    if (!isWheel && isos.length) {
+      return isos.map((iso, i) => draftFromStored(`stored-${i}`, initial?.outcomes[i] ?? "", iso));
+    }
+    return [blankDateDraft("a"), blankDateDraft("b")];
+  });
+  const [customText, setCustomText] = useState(() => (initial?.closesAt ? phraseFor(new Date(initial.closesAt)) : ""));
+  const [customLock, setCustomLock] = useState<string | null>(initial?.closesAt ?? null);
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, start] = useTransition();
 
@@ -136,40 +147,51 @@ export function ProposeForm({
   const typedOutcomes = outcomes.map((o) => o.trim()).filter(Boolean);
   const newOutcomes = typedOutcomes;
   const allLabels = [...liveLabels, ...newOutcomes];
-  const shown = allLabels.filter(Boolean);
-  const dupes = new Set(shown.map((o) => o.toLowerCase())).size !== shown.length;
-  const outcomeProblem = !multi
-    ? null
-    : liveLabels.some((l) => !l)
-      ? "Outcomes can't be blank."
-      : allLabels.length < 2
-        ? "Add at least two outcomes."
-        : dupes
-          ? "Each outcome must be different."
-          : null;
+  const typedDates = isDateMode && !isWheel ? datesForSubmit(dateRows) : [];
+  const shown = isDateMode && !isWheel ? typedDates.map((d) => d.label) : allLabels.filter(Boolean);
+  const dupes = new Set(allLabels.filter(Boolean).map((o) => o.toLowerCase())).size !== allLabels.filter(Boolean).length;
+  const outcomeProblem =
+    isDateMode && !isWheel
+      ? dateProblems(dateRows)
+      : !multi
+        ? null
+        : liveLabels.some((l) => !l)
+          ? "Outcomes can't be blank."
+          : allLabels.length < 2
+            ? "Add at least two outcomes."
+            : dupes
+              ? "Each outcome must be different."
+              : null;
 
   const presetDays = PRESETS.find((x) => x[0] === preset)?.[2];
+  const lockedClose = customLock ? new Date(customLock) : null;
   const closeDate: Date | null =
     closes === "request"
       ? null
       : preset === "custom"
-        ? custom
-          ? new Date(custom)
-          : null
+        ? lockedClose && !Number.isNaN(lockedClose.getTime())
+          ? lockedClose
+          : (matchDate(customText)?.date ?? null)
         : new Date(Date.now() + (presetDays ?? 7) * 86_400_000);
   // An unchanged close time on a live wheel may already have passed; that's fine to keep.
-  const closeUnchanged =
-    !!initial?.closesAt && closes === "date" && preset === "custom" && custom === toLocalInput(new Date(initial.closesAt));
+  const closeUnchanged = !!customLock && closes === "date" && preset === "custom" && customLock === initial?.closesAt;
   const closeProblem =
     closes !== "date" || closeUnchanged
       ? null
-      : !closeDate || Number.isNaN(closeDate.getTime())
-        ? "Pick when it closes."
-        : closeDate <= new Date()
-          ? "The close time has to be in the future."
-          : null;
+      : preset === "custom" && customText.trim() && !closeDate
+        ? "Couldn't match that date. Try “June 30” or “in 2 weeks”."
+        : !closeDate || Number.isNaN(closeDate.getTime())
+          ? "Pick when it closes."
+          : closeDate <= new Date()
+            ? "The close time has to be in the future."
+            : null;
 
   const canSubmit = title.trim().length > 0 && criteria.trim().length > 0 && !outcomeProblem && !closeProblem && !pending;
+  const templateOrder: RuleTemplateId[] = isDateMode
+    ? ["date-ladder", "by-date", "yes-no", "announcement"]
+    : multi
+      ? ["one-winner", "yes-no", "announcement", "by-date"]
+      : ["yes-no", "by-date", "announcement", "one-winner"];
   const categories = !category || CATEGORIES.includes(category) ? CATEGORIES : [...CATEGORIES, category];
 
   const reset = () => {
@@ -181,7 +203,9 @@ export function ProposeForm({
     setKind("binary");
     setCloses("request");
     setPreset("1w");
-    setCustom("");
+    setCustomText("");
+    setCustomLock(null);
+    setDateRows([blankDateDraft("a"), blankDateDraft("b")]);
     setAllowAdditions(false);
   };
 
@@ -195,11 +219,11 @@ export function ProposeForm({
       description,
       category,
       resolutionCriteria: criteria,
-      outcomes: multi ? (isWheel ? allLabels : newOutcomes) : [],
-      dateValues: isDateMode ? dateValues : null,
+      outcomes: isDateMode && !isWheel ? typedDates.map((d) => d.label) : multi ? (isWheel ? allLabels : newOutcomes) : [],
+      dateValues: isDateMode && !isWheel ? typedDates.map((d) => d.iso) : isDateMode ? dateValues : null,
       icon,
       closesAt: closeDate && !Number.isNaN(closeDate.getTime()) ? closeDate.toISOString() : null,
-      allowAdditions: multi && allowAdditions,
+      allowAdditions: (multi || (isDateMode && !isWheel)) && allowAdditions,
     };
     start(async () => {
       const r =
@@ -293,7 +317,7 @@ export function ProposeForm({
               [
                 ["binary", "Yes / No", "One question, two answers."],
                 ["multi", "Multiple choice", "Several outcomes, exactly one wins."],
-                ["date", "Date market", "Bet on when something happens. Options are dates."],
+                ["date", "Date market", "Type dates like “March 31”. Each one is matched for you."],
               ] as const
             ).map(([k, label, sub]) => (
               <button
@@ -314,7 +338,24 @@ export function ProposeForm({
           {isWheel && <p className="mt-1.5 text-xs text-muted">A live wheel&apos;s type can&apos;t change: people already hold its shares.</p>}
         </fieldset>
 
-        {(multi || isDateMode) && (
+        {isDateMode && !isWheel && (
+          <>
+            <DateOutcomes rows={dateRows} onChange={setDateRows} problem={outcomeProblem} />
+            <Toggle
+              checked={allowAdditions}
+              onChange={setAllowAdditions}
+              icon={<ListPlusIcon size={18} />}
+              title="Let people suggest new outcomes"
+              sub={
+                allowAdditions
+                  ? "Anyone can suggest one on the wheel's page, and a Cheesemonger approves it before it's added. Whole-wheel conversions stay off while this is on, since the outcome list isn't final."
+                  : "The list above is final. (Cheesemongers can still add an outcome.)"
+              }
+            />
+          </>
+        )}
+
+        {(multi || (isDateMode && isWheel)) && (
           <fieldset>
             <legend className="mb-2 flex w-full items-baseline justify-between text-sm font-semibold">
               {isDateMode ? "Dates" : "Outcomes"}
@@ -495,15 +536,33 @@ export function ProposeForm({
           />
         </Field>
         <div className="-mt-3 space-y-1.5">
-          {!criteria.trim() && (
-            <button
-              type="button"
-              onClick={() => setCriteria(CRITERIA_TEMPLATE)}
-              className="text-xs font-semibold text-primary hover:underline"
-            >
-              Use a template
-            </button>
-          )}
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Rule templates">
+            {templateOrder.map((id) => {
+              const template = RULE_TEMPLATES.find((t) => t.id === id)!;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  title={template.blurb}
+                  onClick={() =>
+                    setCriteria(
+                      fillRuleTemplate(id, {
+                        title,
+                        dates: typedDates.map((d) => ({ label: d.label, when: d.when })),
+                        closes: closeDate && !closeProblem ? formatWhenEt(closeDate) : null,
+                      }),
+                    )
+                  }
+                  className="h-8 rounded-lg bg-surface-2 px-3 text-xs font-semibold text-muted hover:text-ink"
+                >
+                  {template.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted">
+            Starts from a Polymarket-style outline: how it resolves, when that is read, the source, and the edge cases. Edit every line.
+          </p>
           {criteria.trim() && criteriaTips(criteria).length > 0 && (
             <ul className="space-y-0.5 text-xs text-muted" aria-label="Ways to make this clearer">
               {criteriaTips(criteria).map((t) => (
@@ -565,7 +624,11 @@ export function ProposeForm({
                   role="radio"
                   aria-checked={preset === "custom"}
                   onClick={() => {
-                    if (!custom) setCustom(toLocalInput(new Date(Date.now() + 7 * 86_400_000)));
+                    if (!customText) {
+                      const week = new Date(Date.now() + 7 * 86_400_000);
+                      setCustomText(phraseFor(week));
+                      setCustomLock(week.toISOString());
+                    }
                     setPreset("custom");
                   }}
                   className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold ${
@@ -577,18 +640,23 @@ export function ProposeForm({
               </div>
               {preset === "custom" && (
                 <input
-                  type="datetime-local"
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
+                  value={customText}
+                  onChange={(e) => {
+                    setCustomText(e.target.value);
+                    setCustomLock(null);
+                  }}
+                  placeholder="June 30, end of March, in 2 weeks"
                   className={`${field} mt-2 h-10 max-w-xs`}
-                  aria-label="Close date and time"
+                  aria-label="Close date"
                 />
               )}
               <p className={`mt-2 text-xs ${closeProblem ? "text-no" : "text-muted"}`}>
                 {closeProblem ??
                   (closeDate
-                    ? `Trading stops ${formatDateEst(closeDate)} ET.`
-                    : "")}
+                    ? `Trading stops ${formatWhenEt(closeDate)}.`
+                    : preset === "custom"
+                      ? "Type a date. It matches at 11:59 PM ET unless you add a time."
+                      : "")}
               </p>
             </div>
           ) : (
@@ -631,7 +699,7 @@ export function ProposeForm({
       <aside className="space-y-6 lg:sticky lg:top-[129px] lg:self-start">
         <div>
           <h2 className="mb-2 text-sm font-semibold text-muted">Preview</h2>
-          <Preview title={title} category={category} icon={icon} multi={multi} outcomes={shown} />
+          <Preview title={title} category={category} icon={icon} multi={kind !== "binary"} outcomes={shown} />
           <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted">
             <span className="rounded-full bg-surface-2 px-2 py-0.5">
               {closes === "request"
@@ -640,7 +708,10 @@ export function ProposeForm({
                   ? `Closes ${closeDate.toLocaleDateString("en-US", { dateStyle: "medium" })}`
                   : "Close date needed"}
             </span>
-            {multi && allowAdditions && <span className="rounded-full bg-surface-2 px-2 py-0.5">Open to new outcomes</span>}
+            {(multi || (isDateMode && !isWheel)) && allowAdditions && (
+              <span className="rounded-full bg-surface-2 px-2 py-0.5">Open to new outcomes</span>
+            )}
+            {isDateMode && !isWheel && <span className="rounded-full bg-surface-2 px-2 py-0.5">Date ladder</span>}
           </div>
         </div>
         {children}

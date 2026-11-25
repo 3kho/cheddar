@@ -13,6 +13,7 @@ import { LinkedActions } from "@/components/LinkedActions";
 import { Linkified } from "@/components/Linkified";
 import { Avatar, WheelIcon } from "@/components/Logo";
 import { OrderBookView } from "@/components/OrderBookView";
+import { PositionCard, type PositionLine } from "@/components/PositionCard";
 import { PriceChart, type Series } from "@/components/PriceChart";
 import { SettleForm } from "@/components/SettleForm";
 import { SuggestOutcome } from "@/components/SuggestOutcome";
@@ -21,6 +22,7 @@ import { TradePanel, type TradeWedge } from "@/components/TradePanel";
 import { WheelStatus, resolvedLabel } from "@/components/WheelCard";
 import { cancelOrderAction, haltPassedDateWedgesAction, haltWedgeAction, undoTradeAction } from "@/lib/actions";
 import { formatChance, formatDate, formatDateEst, formatLatta, formatShares, timeAgo } from "@/lib/format";
+import { marketEmbedState } from "@/lib/market-embed";
 import { bestPrice } from "@/lib/market";
 import {
   balancesOf,
@@ -39,12 +41,13 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const data = await getWheel((await params).slug);
   if (!data) return { title: "Cheddar" };
-  const blurb = (data.wheel.description ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
-  const description = blurb || `Trade on “${data.wheel.title}” with Latta Cheese on Cheddar, Hack Club's play-money prediction market.`;
+  const state = marketEmbedState(data.wheel, data.settlement?.status === "pending");
+  const blurb = (data.wheel.description ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+  const description = blurb ? `${state.description}. ${blurb}` : `${state.description}. Trade it on Cheddar.`;
   return {
     title: `${data.wheel.title} · Cheddar`,
     description,
-    // The card image comes from this folder's opengraph-image.tsx (the wheel's own picture).
+    // The card image comes from this folder's opengraph-image.tsx (chance, volume, status).
     openGraph: { title: data.wheel.title, description },
     twitter: { card: "summary_large_image" as const, title: data.wheel.title, description },
   };
@@ -52,6 +55,29 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 /** Colours for the two sides of a 2-outcome wheel. */
 const PAIR = ["var(--chart-1)", "var(--chart-4)"];
+
+/** Plain-language name of a pending settlement, for the banner on the wheel. */
+function proposedOutcomeLabel(
+  settlement: { outcome: string; winningWedgeId: string | null; winningWedgeIds: string[] | null; eventDate: Date | null },
+  wedges: { id: string; label: string }[],
+): string {
+  const name = (id: string | null | undefined) => wedges.find((w) => w.id === id)?.label;
+  if (settlement.outcome === "moldy") return "voiding it, so every share would pay 0.50 Lc";
+  if (settlement.outcome === "all_no") return "No";
+  if (settlement.outcome === "all_yes") return "Yes on every outcome";
+  if (settlement.outcome === "wedge_wins") {
+    const label = name(settlement.winningWedgeId);
+    return label ? `“${label}” as the winner` : "a winner";
+  }
+  if (settlement.outcome === "multi_yes") {
+    const labels = (settlement.winningWedgeIds ?? []).map((id) => name(id)).filter((x): x is string => !!x);
+    return labels.length ? `${labels.join(", ")} as winners` : "several winners";
+  }
+  if (settlement.outcome === "date") {
+    return settlement.eventDate ? `the event date ${formatDate(settlement.eventDate)}` : "a date";
+  }
+  return "an outcome";
+}
 
 export default async function WheelPage({
   params,
@@ -103,6 +129,7 @@ export default async function WheelPage({
   const pos = new Map(mine.positions.map((p) => [p.wedgeId, p]));
   const labelOf = (id: string | null) => wheel.wedges.find((w) => w.id === id)?.label ?? "";
 
+  const positionLines: PositionLine[] = [];
   const tradeWedges: TradeWedge[] = wheel.wedges.map((w) => {
     const p = pos.get(w.id);
     return {
@@ -117,6 +144,28 @@ export default async function WheelPage({
       costNo: heldCost(w.id, "NO", p?.noShares ?? 0),
     };
   });
+  for (const t of tradeWedges) {
+    const chance = wheel.wedges.find((w) => w.id === t.id)?.chance ?? null;
+    const prefix = binary ? "" : `${t.label} · `;
+    if (t.heldYes > 0) {
+      positionLines.push({
+        key: `${t.id}:YES`,
+        label: `${prefix}Yes`,
+        shares: t.heldYes,
+        investedTicks: t.costYes,
+        valueTicks: chance == null ? null : t.heldYes * chance,
+      });
+    }
+    if (t.heldNo > 0) {
+      positionLines.push({
+        key: `${t.id}:NO`,
+        label: `${prefix}No`,
+        shares: t.heldNo,
+        investedTicks: t.costNo,
+        valueTicks: chance == null ? null : t.heldNo * (100 - chance),
+      });
+    }
+  }
 
   const tradable = wheel.status === "open" && (!wheel.closesAt || wheel.closesAt > new Date());
   const gate = !user
@@ -291,7 +340,7 @@ export default async function WheelPage({
   const resolved = resolvedLabel(wheel);
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-8 pb-20 lg:grid-cols-[minmax(0,1fr)_340px] lg:pb-0 xl:grid-cols-[minmax(0,938px)_372px] xl:justify-center">
+    <div className="rise-in grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-8 pb-20 lg:grid-cols-[minmax(0,1fr)_340px] lg:pb-0 xl:grid-cols-[minmax(0,938px)_372px] xl:justify-center">
       <div className="min-w-0 space-y-8">
         <header className="flex items-start gap-4">
           <WheelIcon icon={wheel.icon} category={wheel.category} size={64} />
@@ -368,10 +417,17 @@ export default async function WheelPage({
           <section className="flex items-start gap-3 rounded-xl border border-accent/50 bg-accent-soft p-4 text-sm">
             <CheeseIcon size={20} className="mt-0.5 shrink-0 text-accent" />
             <div>
-              <h2 className="font-semibold">Ripening</h2>
+              <h2 className="font-semibold">Outcome proposed</h2>
               <p className="mt-0.5 text-muted">
-                Someone asked to close this wheel. Trading is paused while the Cheesemongers check the result. If they
-                don&apos;t agree, trading reopens.
+                {settlementProposedBy ?? "Someone"} proposed {proposedOutcomeLabel(settlement, wheel.wedges)}.{" "}
+                {wheel.status === "ripening" ? (
+                  <>Trading is paused while the Cheesemongers check it. If they don&apos;t agree, trading reopens.</>
+                ) : (
+                  <>
+                    Trading stays open while the Cheesemongers check it. If they agree, the wheel closes and pays out.
+                    If they don&apos;t, this proposal is dropped.
+                  </>
+                )}
               </p>
             </div>
           </section>
@@ -541,7 +597,7 @@ export default async function WheelPage({
         )}
 
         {!done && (
-          <details open className="group/ob rounded-xl bg-surface shadow-mid">
+          <details className="group/ob rounded-xl bg-surface shadow-mid">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl p-4 hover:bg-hover [&::-webkit-details-marker]:hidden">
               <span className="text-base font-semibold">
                 Order Book{!binary && <span className="font-medium text-muted"> · {selected.label}</span>}
@@ -643,6 +699,7 @@ export default async function WheelPage({
       </div>
 
       <aside className="space-y-8 lg:sticky lg:top-[129px] lg:self-start">
+        {user && <PositionCard lines={positionLines} />}
         <div id="trade" className="scroll-mt-32">
           <TradePanel
             wedges={tradeWedges}
