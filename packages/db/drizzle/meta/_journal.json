@@ -134,6 +134,41 @@
       "when": 1794850375830,
       "tag": "0018_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794850376830,
+      "tag": "0019_undo_trades",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794850377830,
+      "tag": "0020_date_markets",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794850378830,
+      "tag": "0021_date_settlement",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794850379830,
+      "tag": "0022_settlement_all_yes",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794850380830,
+      "tag": "0023_settlement_multi_yes",
+      "breakpoints": true
     }
   ]
 }
