@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS slack_channel_members (
     added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id)
 );
+--> statement-breakpoint
 
 -- Table: slack_channel_left
 -- Users that were once in the channel but are no longer members.
