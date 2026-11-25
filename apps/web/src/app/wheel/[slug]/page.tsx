@@ -291,7 +291,7 @@ export default async function WheelPage({
   const resolved = resolvedLabel(wheel);
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-8 pb-20 lg:grid-cols-[minmax(0,1fr)_340px] lg:pb-0 xl:grid-cols-[minmax(0,938px)_372px] xl:justify-center">
+    <div className="rise-in grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-8 pb-20 lg:grid-cols-[minmax(0,1fr)_340px] lg:pb-0 xl:grid-cols-[minmax(0,938px)_372px] xl:justify-center">
       <div className="min-w-0 space-y-8">
         <header className="flex items-start gap-4">
           <WheelIcon icon={wheel.icon} category={wheel.category} size={64} />

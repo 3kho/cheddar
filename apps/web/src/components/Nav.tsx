@@ -6,6 +6,7 @@ import type { SessionUser } from "@/lib/session";
 import { CategoryBar } from "./CategoryBar";
 import { ActivityIcon, CheeseIcon, LattaCoin, PlusIcon, SearchIcon, TrophyIcon } from "./Icons";
 import { Avatar, Logo } from "./Logo";
+import { ScrollChrome } from "./ScrollChrome";
 import { ThemeToggle } from "./ThemeToggle";
 
 export async function Nav({ user }: { user: SessionUser | null }) {
@@ -16,7 +17,8 @@ export async function Nav({ user }: { user: SessionUser | null }) {
   ]);
   const total = bal ? bal.available + bal.locked + positions : 0;
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-bg">
+    <header className="site-header sticky top-0 z-30 border-b border-line bg-bg">
+      <ScrollChrome />
       <div className="mx-auto flex h-16 max-w-[1350px] items-center gap-4 px-4 lg:grid lg:grid-cols-[minmax(max-content,1fr)_minmax(0,30rem)_minmax(max-content,1fr)] lg:gap-12 lg:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-2 text-[19px] font-bold tracking-tight">
           <Logo size={28} />
