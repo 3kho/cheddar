@@ -2,7 +2,9 @@ import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import { Suspense } from "react";
 import { CategoryIconsProvider } from "@/components/CategoryIcons";
+import { NavigationProgress } from "@/components/NavigationProgress";
 import { CheeseIcon, MouseIcon } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { Nav } from "@/components/Nav";
@@ -58,6 +60,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="flex min-h-screen flex-col font-sans">
+        <Suspense fallback={null}>
+          <NavigationProgress />
+        </Suspense>
         <CategoryIconsProvider icons={catIcons}>
         <Nav user={user} />
         {user?.isSuspended && (
