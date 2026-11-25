@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
-import { eq, wheels } from "@cheddar/db";
-import { getDb } from "@/lib/db";
+import { marketEmbedState } from "@/lib/market-embed";
+import { getWheel } from "@/lib/queries";
 
-export const alt = "A market on Cheddar";
+export const alt = "Current chance, volume, and status of a market on Cheddar";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const dynamic = "force-dynamic";
@@ -26,18 +26,19 @@ async function iconPng(icon: string | null): Promise<string | null> {
 }
 
 /**
- * A market's link card: the Cheddar frame with the cheese slice on the left, the market's own
- * picture sitting on top of the slice (just the slice when it has none), and its question on the right.
+ * A market's link card: the Cheddar frame, the market's picture on the cheese slice, and the
+ * live state (chance, volume, status) on the right so an unfurl shows where the market is now.
  */
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const db = await getDb();
-  const [w] = await db.select({ title: wheels.title, icon: wheels.icon }).from(wheels).where(eq(wheels.slug, slug));
+  const data = await getWheel(slug);
   const frame = await readFile(new URL("../../../assets/og-market-frame.png", import.meta.url));
   const bg = `data:image/png;base64,${frame.toString("base64")}`;
-  const pic = await iconPng(w?.icon ?? null);
-  const title = (w?.title ?? "Cheddar").slice(0, 140);
-  const fontSize = title.length > 90 ? 38 : title.length > 55 ? 46 : 56;
+  const pic = await iconPng(data?.wheel.icon ?? null);
+  const title = (data?.wheel.title ?? "Cheddar").slice(0, 140);
+  const state = data ? marketEmbedState(data.wheel, data.settlement?.status === "pending") : null;
+  const fontSize = title.length > 90 ? 32 : title.length > 55 ? 40 : 48;
+  const proposed = state?.statusLabel === "Outcome proposed";
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", position: "relative", background: "#000" }}>
@@ -62,17 +63,50 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         <div
           style={{
             position: "absolute",
-            left: 580,
-            top: 130,
-            width: 560,
-            height: 370,
+            left: 560,
+            top: 78,
+            width: 580,
+            height: 474,
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
           }}
         >
-          <div style={{ color: "#FFE08A", fontSize, lineHeight: 1.15, fontWeight: 700, letterSpacing: -1 }}>{title}</div>
-          <div style={{ marginTop: 28, color: "#FDA444", fontSize: 30 }}>Trade it on Cheddar</div>
+          {state && (
+            <div
+              style={{
+                display: "flex",
+                alignSelf: "flex-start",
+                marginBottom: 16,
+                padding: "6px 14px",
+                borderRadius: 999,
+                background: proposed ? "#3A2E14" : "#1A1C22",
+                color: proposed ? "#F5B83D" : "#C8CDD4",
+                fontSize: 22,
+                fontWeight: 700,
+              }}
+            >
+              {state.statusLabel}
+            </div>
+          )}
+          <div style={{ color: "#FFE08A", fontSize, lineHeight: 1.12, fontWeight: 700, letterSpacing: -1 }}>{title}</div>
+          <div style={{ display: "flex", alignItems: "flex-end", marginTop: 22, color: "#8EB4FF" }}>
+            <div style={{ fontSize: 84, fontWeight: 700, letterSpacing: -2, lineHeight: 1 }}>{state?.chanceLabel ?? "—"}</div>
+            {state?.chanceCaption ? (
+              <div style={{ marginLeft: 14, marginBottom: 10, fontSize: 28, color: "#FDA444" }}>{state.chanceCaption}</div>
+            ) : null}
+          </div>
+          <div style={{ marginTop: 14, color: "#E7E9EE", fontSize: 26 }}>{state?.volumeLabel ?? "Trade it on Cheddar"}</div>
+          {state && state.outcomes.length > 1 && (
+            <div style={{ display: "flex", flexDirection: "column", marginTop: 18, gap: 6 }}>
+              {state.outcomes.map((o) => (
+                <div key={o.label} style={{ display: "flex", justifyContent: "space-between", width: 460, color: "#F4F5F7", fontSize: 22 }}>
+                  <div style={{ display: "flex" }}>{o.label.slice(0, 42)}</div>
+                  <div style={{ display: "flex", color: "#8EB4FF", fontWeight: 700 }}>{o.chance}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     ),
